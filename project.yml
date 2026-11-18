@@ -47,5 +47,4 @@ targets:
         SWIFT_VERSION: "6.0"
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
-        # TODO(Görev 12): OWNER/REPO gerçek GitHub deposuyla değiştirilecek (tek yer burası).
-        UPDATE_FEED_URL: https:/$()/github.com/OWNER/REPO/releases/latest/download/appcast.xml
+        UPDATE_FEED_URL: https:/$()/github.com/Melbergmbk/etodo/releases/latest/download/appcast.xml
