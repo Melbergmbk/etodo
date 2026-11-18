@@ -14,8 +14,8 @@ git fetch -q origin main
 build_no=$(awk '/CURRENT_PROJECT_VERSION:/{gsub(/"/,"",$2); print $2; exit}' project.yml)
 last_tag=$(gh release list --repo "$repo" --limit 1 --json tagName --jq '.[0].tagName // ""')
 if [[ -n "$last_tag" ]]; then
-  git fetch -q origin "refs/tags/$last_tag:refs/tags/$last_tag"
-  last_no=$(git show "$last_tag:project.yml" | awk '/CURRENT_PROJECT_VERSION:/{gsub(/"/,"",$2); print $2; exit}')
+  git fetch -q origin "refs/tags/${last_tag}:refs/tags/${last_tag}"
+  last_no=$(git show "${last_tag}:project.yml" | awk '/CURRENT_PROJECT_VERSION:/{gsub(/"/,"",$2); print $2; exit}')
   (( build_no > last_no )) || { echo "CURRENT_PROJECT_VERSION ($build_no) son sürümden ($last_tag: $last_no) büyük olmalı."; exit 1; }
 fi
 
@@ -39,5 +39,5 @@ cp "$dmg" "$stable_dir/Etodo.dmg"
 gh release create "$tag" "$dmg" "$stable_dir/Etodo.dmg" "$feed/appcast.xml" --repo "$repo" \
   --target "$(git rev-parse HEAD)" --title "Etodo $version" \
   --notes "Kurulum için: https://github.com/$repo#kurulum"
-git fetch -q origin "refs/tags/$tag:refs/tags/$tag"
+git fetch -q origin "refs/tags/${tag}:refs/tags/${tag}"
 echo "Yayınlandı: https://github.com/$repo/releases/tag/$tag"
