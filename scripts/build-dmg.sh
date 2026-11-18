@@ -38,10 +38,12 @@ rw=$stage.rw.dmg
 rm -f "$dmg" "$rw"
 hdiutil create -volname "Etodo" -srcfolder "$stage" -fs HFS+ -format UDRW -ov "$rw" >/dev/null
 mnt=$(hdiutil attach "$rw" -nobrowse -noautoopen | awk -F'\t' '/\/Volumes\//{print $NF}')
+# Aynı adlı başka bir disk açıksa bu "Etodo 1" olarak bağlanır; AppleScript gerçek adı kullanmalı.
+volname=${mnt:t}
 # Pencere düzeni (arka plan, simge yerleri) Finder'a AppleScript ile verilir; izin yoksa düz pencereyle devam edilir.
 osascript <<OSA || echo "Uyarı: Finder pencere düzeni uygulanamadı (Otomasyon izni?)." >&2
 tell application "Finder"
-  tell disk "Etodo"
+  tell disk "$volname"
     open
     set current view of container window to icon view
     set toolbar visible of container window to false
@@ -66,7 +68,7 @@ tell application "Finder"
     close
   end tell
   delay 2
-  tell disk "Etodo"
+  tell disk "$volname"
   end tell
 end tell
 OSA
