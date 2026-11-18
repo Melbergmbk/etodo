@@ -61,10 +61,10 @@ private struct GeneralSettings: View {
             Section("Kayıt") {
                 LabeledContent("Varsayılan kayıt yeri") {
                     HStack(spacing: 8) {
-                        Label(DestinationPicker.displayName(model.destination), systemImage: "folder")
+                        Label(DestinationPicker.rootName(model.destination), systemImage: "folder")
                             .lineLimit(1)
                             .truncationMode(.middle)
-                            .help(model.destination.path)
+                            .help(FolderLayout.root(in: model.destination).path)
                         Button("Değiştir…") { model.chooseOtherFolder() }
                             .controlSize(.small)
                             .disabled(model.isBusy)

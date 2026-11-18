@@ -41,7 +41,7 @@ struct PreviewCard: View {
     private var subtitle: String? {
         switch content {
         case .media(let info): info.uploader
-        case .gallery: "Instagram"
+        case .gallery: nil  // X görsel gönderileri de buraya düşer
         }
     }
 

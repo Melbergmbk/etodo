@@ -1,4 +1,5 @@
 import SwiftUI
+import MedyaCore
 
 struct DestinationPicker: View {
     let model: AppModel
@@ -9,19 +10,24 @@ struct DestinationPicker: View {
                 ForEach(model.recentFolders, id: \.self) { folder in
                     Toggle(isOn: Binding(get: { folder.standardizedFileURL == model.destination.standardizedFileURL },
                                          set: { _ in model.choose(folder) })) {
-                        Text(Self.displayName(folder))
+                        Text(Self.rootName(folder))
                     }
                 }
                 Divider()
                 Button("Başka bir klasör seç…") { model.chooseOtherFolder() }
             } label: {
-                Label(Self.displayName(model.destination), systemImage: "folder")
+                Label(Self.rootName(model.destination), systemImage: "folder")
             }
             .menuStyle(.button)
             .fixedSize()
-            .help(model.destination.path)
+            .help(FolderLayout.root(in: model.destination).path)
         }
         .disabled(model.isBusy)
+    }
+
+    /// Kayıt yeri ayarı üst klasördür; kullanıcıya dosyaların gerçekte gittiği Etodo klasörü gösterilir.
+    static func rootName(_ parent: URL) -> String {
+        displayName(FolderLayout.root(in: parent))
     }
 
     /// "İndirilenler › Etodo" gibi kısa, okunur ad.

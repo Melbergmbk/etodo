@@ -88,16 +88,26 @@ final class AppModel {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        // Kayıt yeri, Etodo klasörünün duracağı üst klasördür (varsayılan ~/Downloads → ~/Downloads/Etodo/…).
         let fallback = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(AppIdentity.folderName, isDirectory: true)
-        let saved = (defaults.stringArray(forKey: "recentFolders") ?? []).map { URL(fileURLWithPath: $0, isDirectory: true) }
-        recentFolders = saved.isEmpty ? [fallback] : saved
-        destination = defaults.string(forKey: "destination").map { URL(fileURLWithPath: $0, isDirectory: true) } ?? fallback
+        // Eski adla (Medya İndirici) seçilmiş kayıt yeri yeni bundle id'nin ayarlarına bir kez taşınır.
+        let old = defaults.string(forKey: "destination") == nil ? UserDefaults(suiteName: Self.legacyBundleID) : nil
+        let storedRecent = defaults.stringArray(forKey: "recentFolders") ?? old?.stringArray(forKey: "recentFolders") ?? []
+        var seen = Set<String>()
+        let saved = storedRecent.map { FolderLayout.parentFolder(stored: $0, fallback: fallback) }
+            .filter { seen.insert($0.standardizedFileURL.path).inserted }
+        recentFolders = saved.isEmpty ? [fallback] : Array(saved.prefix(3))
+        destination = FolderLayout.parentFolder(stored: defaults.string(forKey: "destination") ?? old?.string(forKey: "destination"),
+                                                fallback: fallback)
         disclaimerAccepted = defaults.bool(forKey: Self.disclaimerKey)
         browser = Browser(rawValue: defaults.string(forKey: Self.browserKey) ?? "") ?? Self.systemDefaultBrowser()
+        defaults.set(destination.path, forKey: "destination")
+        defaults.set(recentFolders.map(\.path), forKey: "recentFolders")
     }
 
     /// Sistemin varsayılan tarayıcısı desteklenenlerdense o, değilse Chrome.
+    private static let legacyBundleID = "app.medyaindirici.mac"
+
     static func systemDefaultBrowser() -> Browser {
         guard let https = URL(string: "https://example.com"),
               let app = NSWorkspace.shared.urlForApplication(toOpen: https),
@@ -395,8 +405,10 @@ final class AppModel {
 
     // MARK: Kayıt yeri
 
-    func choose(_ folder: URL) {
+    func choose(_ picked: URL) {
         guard !isBusy else { return }
+        // Etodo klasörünün kendisi seçildiyse iç içe Etodo/Etodo oluşmasın
+        let folder = FolderLayout.parentFolder(stored: picked.path, fallback: destination)
         destination = folder
         defaults.set(folder.path, forKey: "destination")
         remember(folder)
@@ -410,7 +422,7 @@ final class AppModel {
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
         panel.prompt = "Seç"
-        panel.message = "İndirilen dosyaların kaydedileceği klasörü seç."
+        panel.message = "\(AppIdentity.folderName) klasörünün oluşturulacağı yeri seç."
         panel.directoryURL = destination
         if panel.runModal() == .OK, let url = panel.url { choose(url) }
     }

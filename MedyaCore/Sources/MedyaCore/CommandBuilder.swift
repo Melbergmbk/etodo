@@ -19,8 +19,8 @@ public enum CommandBuilder {
             "--progress-template",
             "download:MI|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s",
             "--print", "after_move:filepath",
-            "-P", r.destination.path,
-            "-o", "%(title).150B [%(id)s].%(ext)s",
+            "-P", FolderLayout.root(in: r.destination).path,
+            "-o", FolderLayout.ytdlpOutputTemplate(r),
             "--windows-filenames",
         ]
         if r.site == .youtube {
@@ -40,7 +40,11 @@ public enum CommandBuilder {
     }
 
     public static func galleryDLArguments(_ r: DownloadRequest) -> [String] {
-        cookieArguments(r) + ["-D", r.destination.path, r.url.absoluteString]
+        cookieArguments(r) + [
+            "-d", FolderLayout.root(in: r.destination).path,
+            "-o", "directory=" + FolderLayout.galleryDLDirectory(r),
+            r.url.absoluteString,
+        ]
     }
 
     private static func cookieArguments(_ r: DownloadRequest) -> [String] {

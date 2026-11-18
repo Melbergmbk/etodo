@@ -24,7 +24,7 @@ public actor Downloader {
     public func download(_ r: DownloadRequest,
                          progress: @escaping @Sendable (DownloadProgress) -> Void) async throws(UserFacingError) -> [URL] {
         lastErrorOutput = ""
-        try ensureDestination(r.destination)
+        try ensureDestination(FolderLayout.root(in: r.destination))
         return try await withCookieFallback(r) { (r) async throws(UserFacingError) -> [URL] in try await self.downloadOnce(r, progress: progress) }
     }
 
@@ -48,7 +48,7 @@ public actor Downloader {
     private func fetchInfoOnce(_ r: DownloadRequest) async throws(UserFacingError) -> FetchResult {
         let result = try await execute(tools.ytdlp, CommandBuilder.infoArguments(r, tools: tools), onLine: { _ in })
         if result.exitCode != 0 {
-            if r.site == .instagram, Self.hasNoVideo(result.stderr) { return .images }
+            if Self.mayHaveImages(r), Self.hasNoVideo(result.stderr) { return .images }
             throw fail(result.stderr, r)
         }
         do {
@@ -60,7 +60,7 @@ public actor Downloader {
 
     private func downloadOnce(_ r: DownloadRequest,
                               progress: @escaping @Sendable (DownloadProgress) -> Void) async throws(UserFacingError) -> [URL] {
-        if r.format == .images { return try await runGalleryDL(r, prior: []) }
+        if FolderLayout.usesGalleryDL(r) { return try await runGalleryDL(r, prior: []) }
 
         let paths = LockedList()
         let result = try await execute(tools.ytdlp, CommandBuilder.ytdlpArguments(r, tools: tools)) { line in
@@ -75,8 +75,10 @@ public actor Downloader {
             if files.isEmpty { throw fail(result.stderr.isEmpty ? "Dosya yolu alınamadı" : result.stderr, r) }
             return files
         }
-        if r.site == .instagram, Self.hasNoVideo(result.stderr) {
-            return try await runGalleryDL(r, prior: paths.all)
+        if Self.mayHaveImages(r), Self.hasNoVideo(result.stderr) {
+            var images = r
+            images.format = .images
+            return try await runGalleryDL(images, prior: paths.all)
         }
         throw fail(result.stderr, r)
     }
@@ -118,9 +120,18 @@ public actor Downloader {
         return .classify(stderr: stderr, browser: r.browser)
     }
 
+    /// Görsel gönderisi olabilen siteler: Instagram ve X.
+    private static func mayHaveImages(_ r: DownloadRequest) -> Bool {
+        switch Platform(url: r.url, site: r.site) {
+        case .instagram, .x: true
+        default: false
+        }
+    }
+
     private static func hasNoVideo(_ stderr: String) -> Bool {
         let t = stderr.lowercased()
         return t.contains("there is no video in this post") || t.contains("no video formats found")
+            || t.contains("no video could be found in this tweet")
     }
 }
 

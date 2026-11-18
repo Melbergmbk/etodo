@@ -56,5 +56,11 @@ private final class TickCounter: @unchecked Sendable {
         print("LIVE ses: \(audio.lastPathComponent) \(asize) bayt")
         #expect(audio.pathExtension == "mp3")
         #expect(asize > 0)
+
+        let base = out.appendingPathComponent("Etodo/YouTube/jawed").path
+        #expect(video.deletingLastPathComponent().path == base + "/Videolar")
+        #expect(audio.deletingLastPathComponent().path == base + "/Sesler")
+        let tree = fm.enumerator(atPath: out.path)?.compactMap { $0 as? String }.sorted() ?? []
+        print("LIVE ağaç:\n" + tree.map { "  " + $0 }.joined(separator: "\n"))
     }
 }

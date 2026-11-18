@@ -47,10 +47,11 @@ final class ProgressBox: @unchecked Sendable {
         try Data("x".utf8).write(to: u)
         return u
     }
-    func request(_ site: Site, _ format: MediaFormat, dest: URL) -> DownloadRequest {
-        let link = site == .instagram ? "https://www.instagram.com/p/XYZ/" : "https://youtu.be/abc"
+    func request(_ site: Site, _ format: MediaFormat, dest: URL, link: String? = nil) -> DownloadRequest {
+        let link = link ?? (site == .instagram ? "https://www.instagram.com/p/XYZ/" : "https://youtu.be/abc")
         return DownloadRequest(url: URL(string: link)!, site: site, format: format, destination: dest, browser: .chrome)
     }
+    let tweet = "https://x.com/nasa/status/1"
     let isYtdlp: @Sendable (URL, [String]) -> Bool = { u, _ in u.lastPathComponent == "yt-dlp" }
     let isGallery: @Sendable (URL, [String]) -> Bool = { u, _ in u.lastPathComponent == "gallery-dl" }
 
@@ -119,18 +120,76 @@ final class ProgressBox: @unchecked Sendable {
         #expect(box.all.last?.fraction == 1)
     }
 
-    @Test func instagramNoVideoFallsBackToGalleryDL() async throws {
+    @Test func instagramPostGoesStraightToGalleryDL() async throws {
+        let dir = try tempDir()
+        let a = try touch("1.jpg", in: dir), b = try touch("2.mp4", in: dir)
+        let runner = FakeRunner([.init(matches: isGallery, lines: [a.path, "# " + b.path],
+                                       result: ProcessResult(exitCode: 0, stdout: "", stderr: ""))])
+        let files = try await Downloader(runner: runner, tools: tools)
+            .download(request(.instagram, .video(maxHeight: nil), dest: dir)) { _ in }
+        #expect(files == [a, b])
+        #expect(!runner.calls.contains { $0.0.lastPathComponent == "yt-dlp" })
+        #expect(runner.calls.first?.1.contains("-d") == true)
+    }
+
+    @Test func instagramPostGalleryDLRetriesWithCookies() async throws {
+        let dir = try tempDir()
+        let a = try touch("1.jpg", in: dir)
+        let runner = FakeRunner([
+            .init(matches: { u, a in u.lastPathComponent == "gallery-dl" && !a.contains("--cookies-from-browser") },
+                  result: ProcessResult(exitCode: 1, stdout: "", stderr: "[instagram][error] HttpError: 'Redirect to login page'")),
+            .init(matches: { u, a in u.lastPathComponent == "gallery-dl" && a.contains("--cookies-from-browser") },
+                  lines: [a.path], result: ProcessResult(exitCode: 0, stdout: "", stderr: "")),
+        ])
+        let files = try await Downloader(runner: runner, tools: tools)
+            .download(request(.instagram, .images, dest: dir)) { _ in }
+        #expect(files == [a])
+        #expect(runner.calls.count == 2)
+    }
+
+    @Test func instagramPostAudioUsesYtdlp() async throws {
+        let dir = try tempDir()
+        let f = try touch("a.mp3", in: dir)
+        let runner = FakeRunner([.init(matches: isYtdlp, lines: [f.path], result: ProcessResult(exitCode: 0, stdout: "", stderr: ""))])
+        let files = try await Downloader(runner: runner, tools: tools)
+            .download(request(.instagram, .audio(kbps: 128), dest: dir)) { _ in }
+        #expect(files == [f])
+        #expect(!runner.calls.contains { $0.0.lastPathComponent == "gallery-dl" })
+    }
+
+    @Test func tweetWithoutVideoFallsBackToGalleryDL() async throws {
         let dir = try tempDir()
         let a = try touch("1.jpg", in: dir), b = try touch("2.jpg", in: dir), c = try touch("3.jpg", in: dir)
         let runner = FakeRunner([
-            .init(matches: isYtdlp, result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: [Instagram] XYZ: There is no video in this post")),
+            .init(matches: isYtdlp, result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: [twitter] 1: No video could be found in this tweet")),
             .init(matches: isGallery, lines: [a.path, "# " + b.path, c.path],
                   result: ProcessResult(exitCode: 0, stdout: "", stderr: "")),
         ])
         let files = try await Downloader(runner: runner, tools: tools)
-            .download(request(.instagram, .video(maxHeight: nil), dest: dir)) { _ in }
+            .download(request(.other, .video(maxHeight: nil), dest: dir, link: tweet)) { _ in }
         #expect(files == [a, b, c])
         #expect(runner.calls.contains { $0.0.lastPathComponent == "gallery-dl" })
+    }
+
+    @Test func fetchInfoTweetWithoutVideoIsImages() async throws {
+        let runner = FakeRunner([.init(matches: isYtdlp, result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: [twitter] 1: No video could be found in this tweet"))])
+        let r = try await Downloader(runner: runner, tools: tools)
+            .fetchInfo(request(.other, .video(maxHeight: nil), dest: try tempDir(), link: tweet))
+        #expect(r == .images)
+    }
+
+    @Test func downloadCreatesAppRootInsideChosenFolder() async throws {
+        let dir = try tempDir()
+        let runner = FakeRunner([.init(matches: isYtdlp, result: ProcessResult(exitCode: 0, stdout: "", stderr: ""))])
+        _ = try? await Downloader(runner: runner, tools: tools)
+            .download(request(.youtube, .video(maxHeight: nil), dest: dir)) { _ in }
+        #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("Etodo").path))
+        #expect(runner.calls.first.map { contains($0.1, ["-P", dir.appendingPathComponent("Etodo").path]) } == true)
+    }
+
+    func contains(_ args: [String], _ sub: [String]) -> Bool {
+        guard args.count >= sub.count else { return false }
+        return (0...(args.count - sub.count)).contains { Array(args[$0..<($0 + sub.count)]) == sub }
     }
 
     @Test func imagesFormatGoesStraightToGalleryDL() async throws {
@@ -220,12 +279,12 @@ final class ProgressBox: @unchecked Sendable {
         let v = try touch("v.mp4", in: dir), a = try touch("1.jpg", in: dir), b = try touch("2.jpg", in: dir)
         let runner = FakeRunner([
             .init(matches: isYtdlp, lines: [v.path],
-                  result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: [Instagram] XYZ: There is no video in this post")),
+                  result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: [twitter] 1: No video could be found in this tweet")),
             .init(matches: isGallery, lines: ["# " + v.path, a.path, b.path],
                   result: ProcessResult(exitCode: 0, stdout: "", stderr: "")),
         ])
         let files = try await Downloader(runner: runner, tools: tools)
-            .download(request(.instagram, .video(maxHeight: nil), dest: dir)) { _ in }
+            .download(request(.other, .video(maxHeight: nil), dest: dir, link: tweet)) { _ in }
         #expect(files == [v, a, b])
     }
 }

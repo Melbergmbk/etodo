@@ -12,7 +12,7 @@ import Foundation
     func request(_ site: Site, _ format: MediaFormat, browser: Browser = .chrome) -> DownloadRequest {
         let link = site == .instagram ? "https://www.instagram.com/reel/XYZ/" : "https://youtu.be/abc"
         return DownloadRequest(url: URL(string: link)!, site: site, format: format,
-                               destination: URL(fileURLWithPath: "/Users/x/Downloads/MedyaIndirici"),
+                               destination: URL(fileURLWithPath: "/Users/x/Downloads"),
                                browser: browser, useCookies: true)
     }
 
@@ -38,8 +38,8 @@ import Foundation
         #expect(a.contains("--newline"))
         #expect(contains(a, ["--progress-template",
             "download:MI|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s"]))
-        #expect(contains(a, ["-P", "/Users/x/Downloads/MedyaIndirici"]))
-        #expect(contains(a, ["-o", "%(title).150B [%(id)s].%(ext)s"]))
+        #expect(contains(a, ["-P", "/Users/x/Downloads/Etodo"]))
+        #expect(contains(a, ["-o", "YouTube/%(channel,uploader|Bilinmeyen)s/Videolar/%(title).150B [%(id)s].%(ext)s"]))
         #expect(a.contains("--windows-filenames"))
     }
 
@@ -96,8 +96,15 @@ import Foundation
     @Test func galleryDL() {
         let r = request(.instagram, .images, browser: .brave)
         let a = CommandBuilder.galleryDLArguments(r)
-        #expect(a == ["--cookies-from-browser", "brave", "-D", "/Users/x/Downloads/MedyaIndirici",
+        #expect(a == ["--cookies-from-browser", "brave", "-d", "/Users/x/Downloads/Etodo",
+                      "-o", "directory=" + FolderLayout.galleryDLDirectory(r),
                       "https://www.instagram.com/reel/XYZ/"])
+        #expect(!a.contains("-D"))
+    }
+
+    @Test func instagramReelOutputTemplate() {
+        let a = CommandBuilder.ytdlpArguments(request(.instagram, .video(maxHeight: nil)), tools: tools)
+        #expect(contains(a, ["-o", "Instagram/%(channel&@{}|Bilinmeyen)s/Reels/%(title).150B [%(id)s].%(ext)s"]))
     }
 
     @Test func browserDisplayNames() {
