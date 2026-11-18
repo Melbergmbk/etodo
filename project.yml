@@ -1,6 +1,7 @@
 name: MedyaIndirici
 options:
   bundleIdPrefix: app.medyaindirici
+  developmentLanguage: tr
   deploymentTarget:
     macOS: "14.0"
 packages:
