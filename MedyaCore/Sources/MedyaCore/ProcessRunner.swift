@@ -20,7 +20,8 @@ public protocol ProcessRunning: Sendable {
 }
 
 public final class SystemProcessRunner: ProcessRunning {
-    public init() {}
+    private let registry: RunningProcesses
+    public init(registry: RunningProcesses = .shared) { self.registry = registry }
 
     public func run(_ executable: URL, _ arguments: [String], environment: [String: String],
                     onLine: @escaping @Sendable (String) -> Void) async throws -> ProcessResult {
@@ -46,6 +47,8 @@ public final class SystemProcessRunner: ProcessRunning {
             group.leave()
             throw error
         }
+        registry.add(box)
+        defer { registry.remove(box) }
         // yazma uçları ebeveynde kapanmazsa EOF hiç gelmez
         try? outPipe.fileHandleForWriting.close()
         try? errPipe.fileHandleForWriting.close()
@@ -76,7 +79,33 @@ public final class SystemProcessRunner: ProcessRunning {
     }
 }
 
-private final class ProcessBox: @unchecked Sendable {
+/// Uygulama kapanırken arkada araç kalmasın diye çalışan tüm süreçlerin kaydı.
+public final class RunningProcesses: @unchecked Sendable {
+    public static let shared = RunningProcesses()
+    private let lock = NSLock()
+    private var boxes: [ObjectIdentifier: ProcessBox] = [:]
+
+    public init() {}
+    func add(_ box: ProcessBox) { lock.withLock { boxes[ObjectIdentifier(box)] = box } }
+    func remove(_ box: ProcessBox) { lock.withLock { _ = boxes.removeValue(forKey: ObjectIdentifier(box)) } }
+
+    /// Bütün süreç ağaçlarını öldürür ve bitene kadar bekler (en çok ~1,5 sn); kapanış sırasında çağrılır.
+    public func terminateAll() {
+        let pids = lock.withLock { Array(boxes.values) }.flatMap { $0.treePIDs() }
+        guard !pids.isEmpty else { return }
+        func anyAlive() -> Bool { pids.contains { kill($0, 0) == 0 } }
+        func wait(_ seconds: Double) {
+            let end = Date().addingTimeInterval(seconds)
+            while anyAlive() && Date() < end { usleep(20_000) }
+        }
+        pids.forEach { kill($0, SIGTERM) }
+        wait(1)
+        for pid in pids where kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+        wait(0.5)
+    }
+}
+
+final class ProcessBox: @unchecked Sendable {
     let process: Process
     init(_ p: Process) { process = p }
 
@@ -94,6 +123,12 @@ private final class ProcessBox: @unchecked Sendable {
                 for pid in pids where kill(pid, 0) == 0 { kill(pid, SIGKILL) }
             }
         }
+    }
+
+    func treePIDs() -> [Int32] {
+        let root = process.processIdentifier
+        guard process.isRunning, root > 0 else { return [] }
+        return [root] + Self.descendants(of: root)
     }
 
     private static func descendants(of pid: Int32) -> [Int32] {

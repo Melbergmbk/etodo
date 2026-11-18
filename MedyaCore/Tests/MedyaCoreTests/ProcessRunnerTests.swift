@@ -76,6 +76,21 @@ final class LineBox: @unchecked Sendable {
         #expect(kill(grandchild, 0) != 0)
     }
 
+    @Test func terminateAllKillsRunningTreesSynchronously() async throws {
+        let box = LineBox()
+        let registry = RunningProcesses()
+        let task = Task {
+            try await SystemProcessRunner(registry: registry).run(URL(fileURLWithPath: "/bin/sh"), ["-c", "trap '' TERM; /bin/sleep 30 & echo $!; wait"],
+                                                environment: [:]) { box.add($0) }
+        }
+        try await Task.sleep(nanoseconds: 300_000_000)
+        let child = try #require(Int32(box.all.first ?? ""))
+        registry.terminateAll()
+        // uygulama kapanırken beklenemez: dönüşte hepsi ölmüş olmalı
+        #expect(kill(child, 0) != 0)
+        _ = try? await task.value
+    }
+
     @Test func missingExecutableThrows() async {
         await #expect(throws: (any Error).self) {
             try await SystemProcessRunner().run(URL(fileURLWithPath: "/nonexistent/tool"), [], environment: [:]) { _ in }
