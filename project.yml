@@ -1,6 +1,6 @@
-name: MedyaIndirici
+name: Etodo
 options:
-  bundleIdPrefix: app.medyaindirici
+  bundleIdPrefix: app.etodo
   developmentLanguage: tr
   deploymentTarget:
     macOS: "14.0"
@@ -11,7 +11,7 @@ packages:
     url: https://github.com/sparkle-project/Sparkle
     from: 2.6.0
 targets:
-  MedyaIndirici:
+  Etodo:
     type: application
     platform: macOS
     sources: [App]
@@ -19,8 +19,8 @@ targets:
       path: App/Info.plist
       properties:
         # Menü çubuğu ve Dock'taki ad: MedyaCore/AppIdentity.displayName ile elle aynı tutulmalı.
-        CFBundleName: "Medya İndirici"
-        CFBundleDisplayName: "Medya İndirici"
+        CFBundleName: "Etodo"
+        CFBundleDisplayName: "Etodo"
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         SUFeedURL: $(UPDATE_FEED_URL)
@@ -34,7 +34,7 @@ targets:
       - package: Sparkle
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: app.medyaindirici.mac
+        PRODUCT_BUNDLE_IDENTIFIER: app.etodo.mac
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         ARCHS: $(ARCHS_STANDARD)
         CODE_SIGN_IDENTITY: "-"

@@ -1,5 +1,5 @@
 public enum AppIdentity {
-    public static let displayName = "Medya İndirici"
-    public static let folderName = "MedyaIndirici"
-    public static let bundleID = "app.medyaindirici.mac"
+    public static let displayName = "Etodo"
+    public static let folderName = "Etodo"
+    public static let bundleID = "app.etodo.mac"
 }

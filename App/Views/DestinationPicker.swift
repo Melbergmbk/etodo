@@ -24,7 +24,7 @@ struct DestinationPicker: View {
         .disabled(model.isBusy)
     }
 
-    /// "İndirilenler › MedyaIndirici" gibi kısa, okunur ad.
+    /// "İndirilenler › Etodo" gibi kısa, okunur ad.
     static func displayName(_ url: URL) -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL.path
         let path = url.standardizedFileURL.path

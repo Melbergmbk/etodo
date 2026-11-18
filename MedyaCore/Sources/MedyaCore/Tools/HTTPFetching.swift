@@ -20,7 +20,7 @@ public final class URLSessionFetcher: HTTPFetching {
 
     private func request(_ url: URL) -> URLRequest {
         var r = URLRequest(url: url)
-        r.setValue("MedyaIndirici", forHTTPHeaderField: "User-Agent")
+        r.setValue(AppIdentity.folderName, forHTTPHeaderField: "User-Agent")
         if url.host == "api.github.com" { r.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept") }
         return r
     }

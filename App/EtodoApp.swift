@@ -4,7 +4,7 @@ import MedyaCore
 import Sparkle
 
 @main
-struct MedyaIndiriciApp: App {
+struct EtodoApp: App {
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
     @State private var model = AppModel()
     @State private var updates = UpdateController()
