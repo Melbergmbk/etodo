@@ -1,0 +1,8 @@
+.superpowers/
+*.xcodeproj
+build/
+.build/
+DerivedData/
+*.dmg
+sparkle_private_key*
+.DS_Store
