@@ -6,3 +6,6 @@ DerivedData/
 *.dmg
 sparkle_private_key*
 .DS_Store
+docs/superpowers/
+docs/tasarim/
+.impeccable/
