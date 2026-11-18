@@ -71,12 +71,14 @@ public actor ToolManager {
                 let ready = fm.isExecutableFile(atPath: wrapper.path) && fm.isExecutableFile(atPath: pythonExe.path)
                     && state != nil && state?.python == installer.currentVersion(.python)
                 // Durum dosyası yalnız sağlık kontrolü geçince yazılır.
-                return ToolStatus(kind: kind, installedVersion: state?.gallery, isReady: ready, verified: ready)
+                return ToolStatus(kind: kind, installedVersion: state?.gallery, isReady: ready, verified: ready,
+                                  hasPrevious: ready && state?.previous != nil)
             default:
                 let v = installer.currentVersion(kind)
                 let ready = kind.executables.allSatisfy { fm.isExecutableFile(atPath: installer.currentLink(kind).appendingPathComponent($0).path) }
                 let verified = v.map { installer.isVerified(kind, version: $0) } ?? false
-                return ToolStatus(kind: kind, installedVersion: v, isReady: v != nil && ready, verified: v != nil && ready && verified)
+                return ToolStatus(kind: kind, installedVersion: v, isReady: v != nil && ready, verified: v != nil && ready && verified,
+                                  hasPrevious: v != nil && installer.keptVersion(kind) != nil)
             }
         }
     }
@@ -165,18 +167,11 @@ public actor ToolManager {
                 if Self.userError(error) == .noInternet { offline = true }
             }
         }
-        if offline {
-            await log.append("Güncelleme kontrolü yapılamadı (internet yok)")
-        } else {
+        if !offline {
             try? Date().formatted(.iso8601).write(to: lastCheckFile, atomically: true, encoding: .utf8)
-            if !failed.isEmpty {
-                let names = failed.map(\.displayName).joined(separator: ", ")
-                await log.append("Güncelleme kontrolü — \(names) güncellenemedi, eski sürüm kullanılıyor")
-            } else if updated.isEmpty {
-                await log.append("Güncelleme kontrolü — \(ToolKind.allCases.count) araç güncel")
-            } else {
-                await log.append("Güncelleme kontrolü — \(updated.count) araç güncellendi")
-            }
+        }
+        if let summary = Self.checkSummary(updated: updated, failed: failed, offline: offline) {
+            await log.append(summary)
         }
         return updated
     }
@@ -184,6 +179,7 @@ public actor ToolManager {
     private func update(_ kind: ToolKind, progress: @escaping @Sendable (Double) -> Void) async throws -> Bool {
         if kind == .galleryDL { return try await updateGalleryDL() }
         let spec = try await kind.resolve(arch: arch, fetcher: installer.fetcher)
+        if spec.version == skippedVersion(kind), installer.currentVersion(kind) != nil { return false }
         let carried = Carried()
         var extra: (@Sendable (URL) async throws -> Void)?
         if kind == .python {
@@ -195,6 +191,7 @@ public actor ToolManager {
         defer { releaseSwap() }
         let previous = installer.currentVersion(kind)
         try installer.commit(kind, version: spec.version)
+        try? setSkipped(kind, nil)
         if kind == .python, let g = carried.value {
             try writeWrapper()
             try writeGalleryState(python: spec.version, gallery: g)
@@ -206,6 +203,31 @@ public actor ToolManager {
             await log.append("\(kind.displayName) \(spec.version) kuruldu (\(verified))")
         }
         return true
+    }
+
+    /// Güncelleme kontrolünün kayda geçecek özeti; sessiz (değişiklik ve hata yok) kontrolde `nil`.
+    static func checkSummary(updated: [ToolKind], failed: [ToolKind], offline: Bool) -> String? {
+        if offline { return "Güncelleme kontrolü yapılamadı (internet yok)" }
+        if !failed.isEmpty {
+            return "Güncelleme kontrolü — \(failed.map(\.displayName).joined(separator: ", ")) güncellenemedi, eski sürüm kullanılıyor"
+        }
+        return updated.isEmpty ? nil : "Güncelleme kontrolü — \(updated.count) araç güncellendi"
+    }
+
+    // MARK: Atlanan sürüm (geri dönülen sürüm, daha yenisi çıkana kadar yeniden kurulmaz)
+
+    /// Sürüm klasörlerinin budanmasından etkilenmesin diye araç klasörlerinin dışında tutulur.
+    private func skipFile(_ kind: ToolKind) -> URL { tools.appendingPathComponent("skipped/\(kind.rawValue)") }
+
+    private func skippedVersion(_ kind: ToolKind) -> String? {
+        (try? String(contentsOf: skipFile(kind), encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func setSkipped(_ kind: ToolKind, _ version: String?) throws {
+        let file = skipFile(kind)
+        guard let version else { try? FileManager.default.removeItem(at: file); return }
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try version.write(to: file, atomically: true, encoding: .utf8)
     }
 
     // MARK: Geri dönme
@@ -241,6 +263,7 @@ public actor ToolManager {
         await acquireSwap()
         defer { releaseSwap() }
         try installer.commit(kind, version: to)
+        try setSkipped(kind, from)
         if kind == .python, let g = carried.value {
             try writeWrapper()
             try writeGalleryState(python: to, gallery: g)
@@ -259,6 +282,7 @@ public actor ToolManager {
             throw ToolError.healthCheckFailed("gallery-dl")
         }
         try writeGalleryState(python: state.python, gallery: target, previous: state.gallery)
+        try setSkipped(.galleryDL, state.gallery)
         await log.append("gallery-dl önceki sürüme döndü: \(state.gallery) → \(target)")
     }
 
@@ -274,10 +298,20 @@ public actor ToolManager {
         return v.isEmpty ? nil : v
     }
 
+    /// Başarısızlık ağdan kaynaklanıyorsa `.noInternet` fırlatır.
     private func pip(_ args: [String], python: URL? = nil) async throws -> Bool {
         let r = try await installer.runner.run(python ?? pythonExe, ["-I", "-m", "pip", "install", "--no-user"] + args,
                                                environment: Self.pythonEnv, onLine: { _ in })
+        if r.exitCode != 0, Self.pipLooksOffline(r.stderr) { throw UserFacingError.noInternet }
         return r.exitCode == 0
+    }
+
+    static func pipLooksOffline(_ stderr: String) -> Bool {
+        let text = stderr.lowercased()
+        return ["failed to establish a new connection", "newconnectionerror", "temporary failure in name resolution",
+                "nodename nor servname", "network is unreachable", "no route to host", "connection refused",
+                "readtimeouterror", "connecttimeouterror", "read timed out", "max retries exceeded"]
+            .contains { text.contains($0) }
     }
 
     /// Yeni Python klasörüne, şu an kullanılan gallery-dl sürümünü (yoksa en yenisini) kurar ve çalıştığını doğrular.
@@ -295,7 +329,8 @@ public actor ToolManager {
         await acquireSwap()
         defer { releaseSwap() }
         let previous = await galleryVersion()
-        let installed = try await pip(["--upgrade", "gallery-dl"])
+        // Geri dönülen sürüm, daha yenisi çıkana kadar yeniden kurulmaz.
+        let installed = try await pip(["--upgrade", skippedVersion(.galleryDL).map { "gallery-dl!=\($0)" } ?? "gallery-dl"])
         let now = installed ? await galleryVersion() : nil
         guard let now else {
             if let previous { _ = try? await pip(["gallery-dl==\(previous)"]) }
@@ -305,6 +340,7 @@ public actor ToolManager {
         try writeWrapper()
         try writeGalleryState(python: installer.currentVersion(.python) ?? "", gallery: now, previous: changed ? previous : nil)
         if changed {
+            try? setSkipped(.galleryDL, nil)
             await log.append(previous.map { "gallery-dl \($0) → \(now) (sağlık kontrolü geçti)" } ?? "gallery-dl \(now) kuruldu (sağlık kontrolü geçti)")
         }
         return changed

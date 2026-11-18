@@ -15,6 +15,16 @@ targets:
     type: application
     platform: macOS
     sources: [App]
+    info:
+      path: App/Info.plist
+      properties:
+        # Menü çubuğu ve Dock'taki ad: MedyaCore/AppIdentity.displayName ile elle aynı tutulmalı.
+        CFBundleName: "Medya İndirici"
+        CFBundleDisplayName: "Medya İndirici"
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSApplicationCategoryType: public.app-category.utilities
     dependencies:
       - package: MedyaCore
       - package: Sparkle
@@ -26,5 +36,6 @@ targets:
         CODE_SIGN_IDENTITY: "-"
         ENABLE_APP_SANDBOX: NO
         ENABLE_HARDENED_RUNTIME: NO
-        GENERATE_INFOPLIST_FILE: YES
+        # Info.plist elle (info.properties); üretilen plist CFBundleName'i PRODUCT_NAME ile ezer.
+        GENERATE_INFOPLIST_FILE: NO
         SWIFT_VERSION: "6.0"

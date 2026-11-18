@@ -46,9 +46,14 @@ struct ToolsSettings: View {
                             presenting: rollbackTarget) { kind in
             Button("Önceki sürüme dön") { model.rollback(kind) }
             Button("Vazgeç", role: .cancel) {}
-        } message: { _ in
-            Text("Yeni sürüm silinmez; istersen sonra yeniden ona dönebilirsin. Süren bir indirme varsa bitmesi beklenir.")
+        } message: { kind in
+            Text(Self.rollbackMessage(kind))
         }
+    }
+
+    static func rollbackMessage(_ kind: ToolKind) -> String {
+        let common = "Şu anki sürüm, daha yenisi çıkana kadar tekrar kurulmaz. Süren bir indirme varsa bitmesi beklenir."
+        return kind == .galleryDL ? "Önceki sürüm yeniden indirilir (internet gerekir). " + common : common
     }
 
     private var footer: some View {
@@ -56,13 +61,14 @@ struct ToolsSettings: View {
             Button("Klasörü Finder'da göster") { model.revealToolsFolder() }
             Spacer()
             Menu("Önceki sürüme dön") {
-                ForEach(statuses.filter(\.isReady), id: \.kind) { status in
+                ForEach(statuses.filter(\.hasPrevious), id: \.kind) { status in
                     Button(status.kind.title) { rollbackTarget = status.kind }
                 }
             }
             .menuStyle(.button)
             .fixedSize()
-            .disabled(model.toolAction != nil || !statuses.contains(where: \.isReady))
+            .disabled(model.toolAction != nil || !statuses.contains(where: \.hasPrevious))
+            .help(statuses.contains(where: \.hasPrevious) ? "" : "Saklanmış önceki sürüm yok; bir araç güncellendiğinde eski sürümü saklanır.")
             Button("Şimdi güncelle") { model.updateToolsNow() }
                 .buttonStyle(.borderedProminent)
                 .disabled(model.toolAction != nil)
@@ -214,13 +220,14 @@ private struct ToolRow: View {
             HStack(spacing: 12) {
                 Text("Kaynak: \(status.source)")
                     .foregroundStyle(.secondary)
-                if !status.isReady {
+                if status.installedVersion == nil {
                     Text("Kurulu değil").foregroundStyle(.orange)
                 } else if status.kind == .galleryDL {
                     Check("Sağlık kontrolü", ok: status.verified)
                 } else {
                     Check(status.verified ? "SHA-256 doğrulandı" : "Doğrulama kaydı yok", ok: status.verified)
-                    Check("Çalışma izni", ok: true)
+                    // isReady: yürütülebilir dosyalar yerinde ve çalıştırma izni var.
+                    Check(status.isReady ? "Çalışma izni" : "Çalışma izni yok", ok: status.isReady)
                 }
             }
             .font(.system(size: 11.5))

@@ -32,13 +32,16 @@ public struct ToolStatus: Sendable, Equatable {
     public var source: String
     /// Son kurulumda SHA-256 doğrulandı mı (gallery-dl için: sağlık kontrolü geçti mi).
     public var verified: Bool
+    /// Geri dönülebilecek saklanmış önceki sürüm var mı.
+    public var hasPrevious: Bool
 
-    public init(kind: ToolKind, installedVersion: String?, isReady: Bool, verified: Bool) {
+    public init(kind: ToolKind, installedVersion: String?, isReady: Bool, verified: Bool, hasPrevious: Bool = false) {
         self.kind = kind
         self.installedVersion = installedVersion
         self.isReady = isReady
         self.source = kind.source
         self.verified = verified
+        self.hasPrevious = hasPrevious
     }
 }
 

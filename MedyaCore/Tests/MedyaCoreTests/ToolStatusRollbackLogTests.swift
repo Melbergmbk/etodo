@@ -189,18 +189,32 @@ import CryptoKit
 
     // MARK: gallery-dl geri dönme (pip ile önceki sürüm)
 
-    /// pip'le kurulan sürümü hatırlayıp `gallery_dl --version`'da onu söyler.
+    /// pip'le kurulan sürümü hatırlayıp `gallery_dl --version`'da onu söyler; `latest` PyPI'daki en yeni sürüm.
     final class PipRunner: ProcessRunning, @unchecked Sendable {
         private let lock = NSLock()
         private var version: String
+        private var _latest = "2.0.0"
+        private var _offline = false
         init(_ v: String) { version = v }
+        var latest: String { get { lock.withLock { _latest } } set { lock.withLock { _latest = newValue } } }
+        var offline: Bool { get { lock.withLock { _offline } } set { lock.withLock { _offline = newValue } } }
         func run(_ executable: URL, _ arguments: [String], environment: [String: String],
                  onLine: @escaping @Sendable (String) -> Void) async throws -> ProcessResult {
             lock.withLock {
-                if let spec = arguments.first(where: { $0.hasPrefix("gallery-dl==") }) {
-                    version = String(spec.dropFirst("gallery-dl==".count))
-                } else if arguments.contains("--upgrade") {
-                    version = "2.0.0"
+                if arguments.contains("pip") {
+                    if _offline {
+                        return ProcessResult(exitCode: 1, stdout: "", stderr: """
+                        WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object>: Failed to establish a new connection: [Errno 8] nodename nor servname provided, or not known')': /simple/gallery-dl/
+                        ERROR: Could not find a version that satisfies the requirement gallery-dl==1.0.0 (from versions: none)
+                        """)
+                    }
+                    if let spec = arguments.first(where: { $0.hasPrefix("gallery-dl==") }) {
+                        version = String(spec.dropFirst("gallery-dl==".count))
+                    } else if arguments.contains("--upgrade") {
+                        let excluded = arguments.first(where: { $0.hasPrefix("gallery-dl!=") }).map { String($0.dropFirst("gallery-dl!=".count)) }
+                        if excluded != _latest { version = _latest }
+                    }
+                    return ProcessResult(exitCode: 0, stdout: "", stderr: "")
                 }
                 return ProcessResult(exitCode: 0, stdout: arguments.contains("gallery_dl") ? "\(version)\n" : "", stderr: "")
             }
@@ -238,5 +252,100 @@ import CryptoKit
         _ = await m.updateAll()
         do { try await m.rollback(.galleryDL); Issue.record("hata bekleniyordu") }
         catch { #expect(error == .noPreviousVersion) }
+    }
+
+    // MARK: Geri dönme kalıcılığı (atlanan sürüm)
+
+    @Test func rollbackIsNotUndoneByNextUpdate() async throws {
+        let root = try tempRoot(), f = FakeFetcher()
+        let m = manager(root, f)
+        publish(f, "v1"); _ = await m.updateAll()
+        publish(f, "v2"); _ = await m.updateAll()
+        try await m.rollback(.ytdlp)
+        #expect(!(await m.updateAll().contains(.ytdlp)))
+        #expect(current(root) == "v1")
+        // Uygulama yeniden açıldı
+        let again = manager(root, f)
+        #expect(!(await again.updateAll().contains(.ytdlp)))
+        #expect(current(root) == "v1")
+    }
+
+    @Test func newerVersionAfterRollbackIsInstalled() async throws {
+        let root = try tempRoot(), f = FakeFetcher()
+        let m = manager(root, f)
+        publish(f, "v1"); _ = await m.updateAll()
+        publish(f, "v2"); _ = await m.updateAll()
+        try await m.rollback(.ytdlp)
+        publish(f, "v3")
+        #expect(await m.updateAll().contains(.ytdlp))
+        #expect(current(root) == "v3")
+        // Atlama kaldırıldı: v2 yeniden yayımlanırsa (ör. geri çekilen sürüm) kurulabilir.
+        publish(f, "v2")
+        #expect(await m.updateAll().contains(.ytdlp))
+        #expect(current(root) == "v2")
+    }
+
+    @Test func galleryDLRollbackIsNotUndoneByNextUpdate() async throws {
+        let root = try tempRoot(), f = FakeFetcher()
+        try fakePython(root, "3.12.1")
+        let r = PipRunner("1.0.0")
+        let m = ToolManager(root: root, fetcher: f, runner: r, arch: "arm64")
+        _ = await m.updateAll()
+        try await m.rollback(.galleryDL)
+        #expect(!(await m.updateAll().contains(.galleryDL)))
+        #expect(await m.status().first { $0.kind == .galleryDL }?.installedVersion == "1.0.0")
+        r.latest = "3.0.0"
+        #expect(await m.updateAll().contains(.galleryDL))
+        #expect(await m.status().first { $0.kind == .galleryDL }?.installedVersion == "3.0.0")
+    }
+
+    @Test func galleryDLRollbackOfflineIsNoInternet() async throws {
+        let root = try tempRoot(), f = FakeFetcher()
+        try fakePython(root, "3.12.1")
+        let r = PipRunner("1.0.0")
+        let m = ToolManager(root: root, fetcher: f, runner: r, arch: "arm64")
+        _ = await m.updateAll()
+        r.offline = true
+        do { try await m.rollback(.galleryDL); Issue.record("hata bekleniyordu") }
+        catch { #expect(error == .noInternet) }
+        #expect(await m.status().first { $0.kind == .galleryDL }?.installedVersion == "2.0.0")
+    }
+
+    @Test func pipNetworkErrorsAreRecognized() {
+        #expect(ToolManager.pipLooksOffline("ERROR: ... Failed to establish a new connection: [Errno 8] nodename nor servname provided"))
+        #expect(ToolManager.pipLooksOffline("Temporary failure in name resolution"))
+        #expect(ToolManager.pipLooksOffline("ReadTimeoutError: HTTPSConnectionPool(host='pypi.org', port=443): Read timed out."))
+        #expect(!ToolManager.pipLooksOffline("ERROR: No matching distribution found for gallery-dl==9.9.9"))
+    }
+
+    // MARK: hasPrevious
+
+    @Test func statusReportsWhetherPreviousVersionIsKept() async throws {
+        let root = try tempRoot(), f = FakeFetcher()
+        let m = manager(root, f)
+        publish(f, "v1"); _ = await m.updateAll()
+        #expect(await m.status().first { $0.kind == .ytdlp }?.hasPrevious == false)
+        publish(f, "v2"); _ = await m.updateAll()
+        #expect(await m.status().first { $0.kind == .ytdlp }?.hasPrevious == true)
+    }
+
+    @Test func galleryDLHasPreviousAfterUpgrade() async throws {
+        let root = try tempRoot(), f = FakeFetcher()
+        try fakePython(root, "3.12.1")
+        let m = ToolManager(root: root, fetcher: f, runner: PipRunner("2.0.0"), arch: "arm64")
+        _ = await m.updateAll()
+        #expect(await m.status().first { $0.kind == .galleryDL }?.hasPrevious == false)
+        let m2 = ToolManager(root: root, fetcher: f, runner: PipRunner("1.0.0"), arch: "arm64")
+        _ = await m2.updateAll()
+        #expect(await m2.status().first { $0.kind == .galleryDL }?.hasPrevious == true)
+    }
+
+    // MARK: Kontrol özeti yalnız değişiklik ya da hata olunca
+
+    @Test func quietCheckWritesNoLogLine() {
+        #expect(ToolManager.checkSummary(updated: [], failed: [], offline: false) == nil)
+        #expect(ToolManager.checkSummary(updated: [.ytdlp], failed: [], offline: false) == "Güncelleme kontrolü — 1 araç güncellendi")
+        #expect(ToolManager.checkSummary(updated: [], failed: [.deno], offline: false) == "Güncelleme kontrolü — deno güncellenemedi, eski sürüm kullanılıyor")
+        #expect(ToolManager.checkSummary(updated: [], failed: [.deno], offline: true) == "Güncelleme kontrolü yapılamadı (internet yok)")
     }
 }
