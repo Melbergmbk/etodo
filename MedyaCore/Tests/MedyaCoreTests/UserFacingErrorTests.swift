@@ -87,10 +87,11 @@ import Testing
         let all: [UserFacingError] = [
             .instagramLoginRequired(.chrome), .privateOrDeleted, .needsToolUpdate, .noInternet,
             .destinationNotWritable, .safariNeedsFullDiskAccess, .browserCookiesUnavailable(.edge),
-            .unsupportedLink, .unknown(details: "x"),
+            .unsupportedLink, .unknown(details: "x"), .cancelled,
         ]
         for e in all { #expect(!e.message.isEmpty) }
         #expect(UserFacingError.privateOrDeleted.message == "Bu gönderi görünmüyor; özel hesap ya da silinmiş olabilir.")
+        #expect(UserFacingError.cancelled.message == "İndirme iptal edildi.")
         #expect(UserFacingError.safariNeedsFullDiskAccess.message.contains("Tam Disk Erişimi"))
     }
 }

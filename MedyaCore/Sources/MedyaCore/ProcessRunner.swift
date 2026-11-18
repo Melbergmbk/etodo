@@ -39,9 +39,13 @@ public final class SystemProcessRunner: ProcessRunning {
         let group = DispatchGroup()
         let box = ProcessBox(process)
 
-        group.enter()
         process.terminationHandler = { _ in group.leave() }
-        try process.run()
+        group.enter()
+        do { try process.run() } catch {
+            process.terminationHandler = nil
+            group.leave()
+            throw error
+        }
         // yazma uçları ebeveynde kapanmazsa EOF hiç gelmez
         try? outPipe.fileHandleForWriting.close()
         try? errPipe.fileHandleForWriting.close()
@@ -76,26 +80,34 @@ private final class ProcessBox: @unchecked Sendable {
     let process: Process
     init(_ p: Process) { process = p }
 
+    /// Süreç ve tüm torunları: önce SIGTERM, 2 sn sonra hâlâ yaşayanlara SIGKILL.
+    /// Çağıran iş parçacığını bloklamamak için arka kuyrukta çalışır.
     func terminateTree() {
-        let pid = process.processIdentifier
-        guard process.isRunning, pid > 0 else { return }
-        Self.pkill("-TERM", parent: pid)
-        process.terminate()
-        DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [process] in
-            guard process.isRunning else { return }
-            Self.pkill("-KILL", parent: pid)
-            kill(pid, SIGKILL)
+        let root = process.processIdentifier
+        guard process.isRunning, root > 0 else { return }
+        DispatchQueue.global().async { [process] in
+            let pids = [root] + Self.descendants(of: root)
+            pids.forEach { kill($0, SIGTERM) }
+            process.terminate()
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
+                // üst süreç ölmüş olsa bile anlık görüntüdeki torunlar öldürülür
+                for pid in pids where kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+            }
         }
     }
 
-    private static func pkill(_ signal: String, parent: Int32) {
+    private static func descendants(of pid: Int32) -> [Int32] {
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
-        p.arguments = [signal, "-P", String(parent)]
-        p.standardOutput = FileHandle.nullDevice
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        p.arguments = ["-P", String(pid)]
+        let pipe = Pipe()
+        p.standardOutput = pipe
         p.standardError = FileHandle.nullDevice
-        try? p.run()
+        guard (try? p.run()) != nil else { return [] }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
+        let children = String(decoding: data, as: UTF8.self).split(separator: "\n").compactMap { Int32($0) }
+        return children + children.flatMap { descendants(of: $0) }
     }
 }
 

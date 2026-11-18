@@ -11,11 +11,13 @@ final class FakeRunner: ProcessRunning, @unchecked Sendable {
     private let lock = NSLock()
     private var scripts: [Script]
     private var _calls: [(URL, [String])] = []
-    init(_ scripts: [Script]) { self.scripts = scripts }
+    var throwing: (any Error)?
+    init(_ scripts: [Script], throwing: (any Error)? = nil) { self.scripts = scripts; self.throwing = throwing }
     var calls: [(URL, [String])] { lock.lock(); defer { lock.unlock() }; return _calls }
 
     func run(_ executable: URL, _ arguments: [String], environment: [String: String],
              onLine: @escaping @Sendable (String) -> Void) async throws -> ProcessResult {
+        if let throwing { throw throwing }
         let s: Script? = lock.withLock { _calls.append((executable, arguments)); return scripts.first { $0.matches(executable, arguments) } }
         guard let s else { return ProcessResult(exitCode: 1, stdout: "", stderr: "no script") }
         s.lines.forEach(onLine)
@@ -134,5 +136,45 @@ final class ProgressBox: @unchecked Sendable {
         let runner = FakeRunner([.init(matches: isYtdlp, result: ProcessResult(exitCode: 1, stdout: "", stderr: stderr))])
         let r = try await Downloader(runner: runner, tools: tools).fetchInfo(request(.instagram, .video(maxHeight: nil), dest: try tempDir()))
         #expect(r == .images)
+    }
+
+    @Test func cancellationMapsToCancelled() async throws {
+        let dir = try tempDir()
+        let d = Downloader(runner: FakeRunner([], throwing: CancellationError()), tools: tools)
+        await #expect(throws: UserFacingError.cancelled) {
+            try await d.download(request(.youtube, .video(maxHeight: nil), dest: dir)) { _ in }
+        }
+    }
+
+    @Test func missingToolMapsToNeedsToolUpdate() async throws {
+        let dir = try tempDir()
+        let missing = ToolPaths(ytdlp: URL(fileURLWithPath: "/nonexistent/yt-dlp"), galleryDL: tools.galleryDL,
+                                ffmpegDir: tools.ffmpegDir, deno: tools.deno)
+        let d = Downloader(runner: SystemProcessRunner(), tools: missing)
+        await #expect(throws: UserFacingError.needsToolUpdate) {
+            try await d.download(request(.youtube, .video(maxHeight: nil), dest: dir)) { _ in }
+        }
+        #expect(!(await d.lastErrorOutput).isEmpty)
+    }
+
+    @Test func fetchInfoNoVideoOnYoutubeIsNotImages() async throws {
+        let runner = FakeRunner([.init(matches: isYtdlp, result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: No video formats found!"))])
+        let d = Downloader(runner: runner, tools: tools)
+        let r = try? await d.fetchInfo(request(.youtube, .video(maxHeight: nil), dest: try tempDir()))
+        #expect(r == nil)
+    }
+
+    @Test func mixedGalleryMergesYtdlpAndGalleryPaths() async throws {
+        let dir = try tempDir()
+        let v = try touch("v.mp4", in: dir), a = try touch("1.jpg", in: dir), b = try touch("2.jpg", in: dir)
+        let runner = FakeRunner([
+            .init(matches: isYtdlp, lines: [v.path],
+                  result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: [Instagram] XYZ: There is no video in this post")),
+            .init(matches: isGallery, lines: ["# " + v.path, a.path, b.path],
+                  result: ProcessResult(exitCode: 0, stdout: "", stderr: "")),
+        ])
+        let files = try await Downloader(runner: runner, tools: tools)
+            .download(request(.instagram, .video(maxHeight: nil), dest: dir)) { _ in }
+        #expect(files == [v, a, b])
     }
 }

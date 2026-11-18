@@ -59,4 +59,26 @@ final class LineBox: @unchecked Sendable {
         try await Task.sleep(nanoseconds: 300_000_000)
         #expect(kill(child, 0) != 0)
     }
+
+    @Test func cancelKillsGrandchildThatIgnoresTerm() async throws {
+        let box = LineBox()
+        let inner = "trap '' TERM; /bin/sleep 30 & echo $!; wait"
+        let task = Task {
+            try await SystemProcessRunner().run(URL(fileURLWithPath: "/bin/sh"), ["-c", "/bin/sh -c \"$INNER\" & wait"],
+                                                environment: ["INNER": inner]) { box.add($0) }
+        }
+        try await Task.sleep(nanoseconds: 500_000_000)
+        let start = Date()
+        task.cancel()
+        _ = try? await task.value
+        #expect(Date().timeIntervalSince(start) < 4)
+        let grandchild = try #require(Int32(box.all.first ?? ""))
+        #expect(kill(grandchild, 0) != 0)
+    }
+
+    @Test func missingExecutableThrows() async {
+        await #expect(throws: (any Error).self) {
+            try await SystemProcessRunner().run(URL(fileURLWithPath: "/nonexistent/tool"), [], environment: [:]) { _ in }
+        }
+    }
 }

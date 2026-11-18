@@ -9,6 +9,7 @@ public enum UserFacingError: Error, Equatable, Sendable {
     case safariNeedsFullDiskAccess
     case browserCookiesUnavailable(Browser)
     case unsupportedLink
+    case cancelled
     case unknown(details: String)
 
     public var message: String {
@@ -29,6 +30,8 @@ public enum UserFacingError: Error, Equatable, Sendable {
             "\(b.displayName) çerezleri okunamadı. \(b.displayName) kurulu olmalı ve en az bir kez açılmış olmalı; olmuyorsa Ayarlar'dan başka bir tarayıcı seç."
         case .unsupportedLink:
             "Bu bağlantı desteklenmiyor. Videonun ya da gönderinin doğrudan linkini yapıştırmayı dene."
+        case .cancelled:
+            "İndirme iptal edildi."
         case .unknown:
             "Beklenmeyen bir sorun oluştu. \"Ayrıntıları göster\" ile hata metnini kopyalayıp iletebilirsin."
         }
