@@ -1,0 +1,75 @@
+{
+  "id": "aqz-KE-bpKQ",
+  "title": "Big Buck Bunny 60fps 4K - Official Blender Foundation Short Film",
+  "uploader": "Blender",
+  "duration": 635,
+  "thumbnail": "https://i.ytimg.com/vi_webp/aqz-KE-bpKQ/maxresdefault.webp",
+  "webpage_url": "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+  "extractor": "youtube",
+  "formats": [
+    {
+      "format_id": "sb3",
+      "ext": "mhtml",
+      "height": 27,
+      "width": 48,
+      "vcodec": "none",
+      "acodec": "none",
+      "format_note": "storyboard",
+      "protocol": "mhtml"
+    },
+    {
+      "format_id": "139-drc",
+      "ext": "m4a",
+      "vcodec": "none",
+      "acodec": "mp4a.40.5",
+      "tbr": 48.792,
+      "filesize": 3871021,
+      "filesize_approx": 3870998,
+      "format_note": "low, DRC",
+      "protocol": "https"
+    },
+    {
+      "format_id": "230",
+      "ext": "mp4",
+      "height": 360,
+      "width": 640,
+      "vcodec": "avc1.4D401E",
+      "acodec": "none",
+      "tbr": 813.45,
+      "protocol": "m3u8_native"
+    },
+    {
+      "format_id": "311",
+      "ext": "mp4",
+      "height": 720,
+      "width": 1280,
+      "vcodec": "avc1.4D4020",
+      "acodec": "none",
+      "tbr": 4553.846,
+      "protocol": "m3u8_native"
+    },
+    {
+      "format_id": "312",
+      "ext": "mp4",
+      "height": 1080,
+      "width": 1920,
+      "vcodec": "avc1.64002A",
+      "acodec": "none",
+      "tbr": 7417.746,
+      "protocol": "m3u8_native"
+    },
+    {
+      "format_id": "315",
+      "ext": "webm",
+      "height": 2160,
+      "width": 3840,
+      "vcodec": "vp9",
+      "acodec": "none",
+      "tbr": 17174.188,
+      "filesize": 1362269481,
+      "filesize_approx": 1362269472,
+      "format_note": "2160p60",
+      "protocol": "https"
+    }
+  ]
+}

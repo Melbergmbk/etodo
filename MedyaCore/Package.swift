@@ -7,6 +7,6 @@ let package = Package(
     products: [.library(name: "MedyaCore", targets: ["MedyaCore"])],
     targets: [
         .target(name: "MedyaCore"),
-        .testTarget(name: "MedyaCoreTests", dependencies: ["MedyaCore"]),
+        .testTarget(name: "MedyaCoreTests", dependencies: ["MedyaCore"], resources: [.copy("Fixtures")]),
     ]
 )
