@@ -2,12 +2,44 @@ import Foundation
 
 public enum ToolKind: String, CaseIterable, Sendable {
     case ytdlp, python, galleryDL, ffmpeg, deno
+
+    public var displayName: String {
+        switch self {
+        case .ytdlp: "yt-dlp"
+        case .python: "Python"
+        case .galleryDL: "gallery-dl"
+        case .ffmpeg: "ffmpeg"
+        case .deno: "deno"
+        }
+    }
+
+    /// Aracın indirildiği yer (kısa, kullanıcıya gösterilir).
+    public var source: String {
+        switch self {
+        case .ytdlp: "github.com/yt-dlp"
+        case .python: "github.com/astral-sh"
+        case .galleryDL: "PyPI (pip)"
+        case .ffmpeg: "ffmpeg.martin-riedl.de"
+        case .deno: "github.com/denoland"
+        }
+    }
 }
 
 public struct ToolStatus: Sendable, Equatable {
     public var kind: ToolKind
     public var installedVersion: String?
     public var isReady: Bool
+    public var source: String
+    /// Son kurulumda SHA-256 doğrulandı mı (gallery-dl için: sağlık kontrolü geçti mi).
+    public var verified: Bool
+
+    public init(kind: ToolKind, installedVersion: String?, isReady: Bool, verified: Bool) {
+        self.kind = kind
+        self.installedVersion = installedVersion
+        self.isReady = isReady
+        self.source = kind.source
+        self.verified = verified
+    }
 }
 
 /// Sağlama toplamının nereden okunacağı.

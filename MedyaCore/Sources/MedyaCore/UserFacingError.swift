@@ -10,6 +10,7 @@ public enum UserFacingError: Error, Equatable, Sendable {
     case browserCookiesUnavailable(Browser)
     case unsupportedLink
     case cancelled
+    case noPreviousVersion
     case unknown(details: String)
 
     public var message: String {
@@ -32,6 +33,8 @@ public enum UserFacingError: Error, Equatable, Sendable {
             "Bu bağlantı desteklenmiyor. Videonun ya da gönderinin doğrudan linkini yapıştırmayı dene."
         case .cancelled:
             "İndirme iptal edildi."
+        case .noPreviousVersion:
+            "Bu aracın saklanmış önceki sürümü yok. Önceki sürüm, araç ilk kez güncellendiğinde saklanır."
         case .unknown:
             "Beklenmeyen bir sorun oluştu. \"Ayrıntıları göster\" ile hata metnini kopyalayıp iletebilirsin."
         }

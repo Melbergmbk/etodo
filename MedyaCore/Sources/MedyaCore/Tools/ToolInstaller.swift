@@ -11,6 +11,20 @@ struct ToolInstaller: Sendable {
     func kindDir(_ k: ToolKind) -> URL { toolsDir.appendingPathComponent(k.rawValue, isDirectory: true) }
     func currentLink(_ k: ToolKind) -> URL { kindDir(k).appendingPathComponent("current") }
 
+    /// SHA-256 doğrulamasından geçen sürüm klasörüne bırakılan işaret.
+    static let verifiedMarker = ".sha256-verified"
+
+    func isVerified(_ k: ToolKind, version: String) -> Bool {
+        FileManager.default.fileExists(atPath: kindDir(k).appendingPathComponent(version).appendingPathComponent(Self.verifiedMarker).path)
+    }
+
+    /// `current` dışında saklanan sürüm (en fazla bir tane kalır).
+    func keptVersion(_ k: ToolKind) -> String? {
+        let current = currentVersion(k)
+        let items = (try? FileManager.default.contentsOfDirectory(atPath: kindDir(k).path)) ?? []
+        return items.filter { $0 != "current" && !$0.hasPrefix(".") && $0 != current }.sorted().last
+    }
+
     func currentVersion(_ k: ToolKind) -> String? {
         guard let dest = try? FileManager.default.destinationOfSymbolicLink(atPath: currentLink(k).path) else { return nil }
         return URL(fileURLWithPath: dest).lastPathComponent
@@ -49,6 +63,7 @@ struct ToolInstaller: Sendable {
 
         let content: URL
         if case .tarGzPython = spec.artifacts[0].unpack { content = out.appendingPathComponent("python", isDirectory: true) } else { content = out }
+        try Data().write(to: content.appendingPathComponent(Self.verifiedMarker))
         try fm.createDirectory(at: kindDir(kind), withIntermediateDirectories: true)
         try fm.moveItem(at: content, to: versionDir)
 
@@ -59,7 +74,7 @@ struct ToolInstaller: Sendable {
         return true
     }
 
-    private func check(_ kind: ToolKind, _ versionDir: URL, _ extra: (@Sendable (URL) async throws -> Void)?) async throws {
+    func check(_ kind: ToolKind, _ versionDir: URL, _ extra: (@Sendable (URL) async throws -> Void)?) async throws {
         let fm = FileManager.default
         for rel in kind.executables {
             let exe = versionDir.appendingPathComponent(rel)

@@ -2,6 +2,9 @@ import Foundation
 
 public actor ToolManager {
     private let installer: ToolInstaller
+    /// Kurulum, güncelleme ve geri dönme kaydı; uygulama indirme bitişlerini de buraya yazar.
+    public nonisolated let log: ActivityLog
+    private let lastCheckFile: URL
     private let arch: String
     private var downloads = 0
     private var swapping = false
@@ -13,6 +16,8 @@ public actor ToolManager {
     public init(root: URL, fetcher: HTTPFetching, runner: ProcessRunning, arch: String) {
         self.arch = arch
         self.installer = ToolInstaller(root: root, fetcher: fetcher, runner: runner)
+        self.log = ActivityLog(file: root.appendingPathComponent("activity.json"))
+        self.lastCheckFile = root.appendingPathComponent("last-check")
     }
 
     public static func currentArch() -> String {
@@ -35,16 +40,26 @@ public actor ToolManager {
 
     // MARK: Durum
 
-    /// gallery-dl durumu: kurulduğu Python sürümü + gallery-dl sürümü.
-    private func galleryState() -> (python: String, gallery: String)? {
+    /// gallery-dl durumu: kurulduğu Python sürümü + gallery-dl sürümü (+ geri dönülebilecek önceki gallery-dl sürümü).
+    private func galleryState() -> (python: String, gallery: String, previous: String?)? {
         guard let text = try? String(contentsOf: galleryStateFile, encoding: .utf8) else { return nil }
         let lines = text.split(whereSeparator: \.isNewline).map(String.init)
-        return lines.count >= 2 ? (lines[0], lines[1]) : nil
+        return lines.count >= 2 ? (lines[0], lines[1], lines.count >= 3 ? lines[2] : nil) : nil
     }
 
-    private func writeGalleryState(python: String, gallery: String) throws {
+    /// Önceki sürüm verilmezse: gallery-dl sürümü değiştiyse eskisi, değişmediyse kayıtlı önceki saklanır.
+    private func writeGalleryState(python: String, gallery: String, previous: String? = nil) throws {
+        let old = galleryState()
+        let keep = previous ?? (old.map { $0.gallery != gallery ? $0.gallery : $0.previous } ?? nil)
         try FileManager.default.createDirectory(at: galleryStateFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try "\(python)\n\(gallery)\n".write(to: galleryStateFile, atomically: true, encoding: .utf8)
+        let text = "\(python)\n\(gallery)\n" + (keep.map { "\($0)\n" } ?? "")
+        try text.write(to: galleryStateFile, atomically: true, encoding: .utf8)
+    }
+
+    /// Son başarılı (internete ulaşılan) güncelleme kontrolü.
+    public func lastCheck() -> Date? {
+        guard let text = try? String(contentsOf: lastCheckFile, encoding: .utf8) else { return nil }
+        return try? Date(text.trimmingCharacters(in: .whitespacesAndNewlines), strategy: .iso8601)
     }
 
     public func status() -> [ToolStatus] {
@@ -55,11 +70,13 @@ public actor ToolManager {
                 let state = galleryState()
                 let ready = fm.isExecutableFile(atPath: wrapper.path) && fm.isExecutableFile(atPath: pythonExe.path)
                     && state != nil && state?.python == installer.currentVersion(.python)
-                return ToolStatus(kind: kind, installedVersion: state?.gallery, isReady: ready)
+                // Durum dosyası yalnız sağlık kontrolü geçince yazılır.
+                return ToolStatus(kind: kind, installedVersion: state?.gallery, isReady: ready, verified: ready)
             default:
                 let v = installer.currentVersion(kind)
                 let ready = kind.executables.allSatisfy { fm.isExecutableFile(atPath: installer.currentLink(kind).appendingPathComponent($0).path) }
-                return ToolStatus(kind: kind, installedVersion: v, isReady: v != nil && ready)
+                let verified = v.map { installer.isVerified(kind, version: $0) } ?? false
+                return ToolStatus(kind: kind, installedVersion: v, isReady: v != nil && ready, verified: v != nil && ready && verified)
             }
         }
     }
@@ -138,9 +155,28 @@ public actor ToolManager {
     private func runUpdateAll() async -> [ToolKind] {
         await acquireWork()
         defer { releaseWork(); updateTask = nil }
-        var updated: [ToolKind] = []
+        var updated: [ToolKind] = [], failed: [ToolKind] = []
+        var offline = false
         for kind in ToolKind.allCases {
-            if let changed = try? await update(kind, progress: { _ in }), changed { updated.append(kind) }
+            do {
+                if try await update(kind, progress: { _ in }) { updated.append(kind) }
+            } catch {
+                failed.append(kind)
+                if Self.userError(error) == .noInternet { offline = true }
+            }
+        }
+        if offline {
+            await log.append("Güncelleme kontrolü yapılamadı (internet yok)")
+        } else {
+            try? Date().formatted(.iso8601).write(to: lastCheckFile, atomically: true, encoding: .utf8)
+            if !failed.isEmpty {
+                let names = failed.map(\.displayName).joined(separator: ", ")
+                await log.append("Güncelleme kontrolü — \(names) güncellenemedi, eski sürüm kullanılıyor")
+            } else if updated.isEmpty {
+                await log.append("Güncelleme kontrolü — \(ToolKind.allCases.count) araç güncel")
+            } else {
+                await log.append("Güncelleme kontrolü — \(updated.count) araç güncellendi")
+            }
         }
         return updated
     }
@@ -157,12 +193,73 @@ public actor ToolManager {
 
         await acquireSwap()
         defer { releaseSwap() }
+        let previous = installer.currentVersion(kind)
         try installer.commit(kind, version: spec.version)
         if kind == .python, let g = carried.value {
             try writeWrapper()
             try writeGalleryState(python: spec.version, gallery: g)
         }
+        let verified = installer.isVerified(kind, version: spec.version) ? "doğrulandı" : "doğrulama kaydı yok"
+        if let previous {
+            await log.append("\(kind.displayName) \(previous) → \(spec.version) (\(verified), eski sürüm saklandı)")
+        } else {
+            await log.append("\(kind.displayName) \(spec.version) kuruldu (\(verified))")
+        }
         return true
+    }
+
+    // MARK: Geri dönme
+
+    /// Saklanan önceki sürüme döner (indirme sürüyorsa bitmesini bekler). Önceki sürüm yoksa `.noPreviousVersion`.
+    public func rollback(_ kind: ToolKind) async throws(UserFacingError) {
+        await acquireWork()
+        defer { releaseWork() }
+        do {
+            if kind == .galleryDL { try await rollbackGalleryDL() } else { try await rollbackTool(kind) }
+        } catch {
+            throw Self.userError(error)
+        }
+    }
+
+    private func rollbackTool(_ kind: ToolKind) async throws {
+        guard let from = installer.currentVersion(kind), let to = installer.keptVersion(kind) else {
+            throw UserFacingError.noPreviousVersion
+        }
+        let carried = Carried()
+        var extra: (@Sendable (URL) async throws -> Void)?
+        if kind == .python {
+            // Eski Python klasöründe o zamanki gallery-dl kurulu durur; çalıştığını doğrula.
+            extra = { @Sendable dir in
+                guard let v = await self.galleryVersion(python: dir.appendingPathComponent("bin/python3")) else {
+                    throw ToolError.healthCheckFailed("gallery-dl")
+                }
+                carried.value = v
+            }
+        }
+        try await installer.check(kind, installer.kindDir(kind).appendingPathComponent(to), extra)
+
+        await acquireSwap()
+        defer { releaseSwap() }
+        try installer.commit(kind, version: to)
+        if kind == .python, let g = carried.value {
+            try writeWrapper()
+            try writeGalleryState(python: to, gallery: g)
+        }
+        await log.append("\(kind.displayName) önceki sürüme döndü: \(from) → \(to)")
+    }
+
+    private func rollbackGalleryDL() async throws {
+        guard let state = galleryState(), let target = state.previous, state.python == installer.currentVersion(.python) else {
+            throw UserFacingError.noPreviousVersion
+        }
+        await acquireSwap()
+        defer { releaseSwap() }
+        guard try await pip(["gallery-dl==\(target)"]), await galleryVersion() == target else {
+            _ = try? await pip(["gallery-dl==\(state.gallery)"])
+            throw ToolError.healthCheckFailed("gallery-dl")
+        }
+        try writeGalleryState(python: state.python, gallery: target, previous: state.gallery)
+        await log.append("gallery-dl önceki sürüme döndü: \(state.gallery) → \(target)")
     }
 
     // MARK: gallery-dl (taşınabilir Python'un site-packages'ine pip ile; her çağrı yalıtılmış)
@@ -204,9 +301,13 @@ public actor ToolManager {
             if let previous { _ = try? await pip(["gallery-dl==\(previous)"]) }
             throw ToolError.healthCheckFailed("gallery-dl")
         }
+        let changed = now != previous
         try writeWrapper()
-        try writeGalleryState(python: installer.currentVersion(.python) ?? "", gallery: now)
-        return now != previous || galleryState()?.python != installer.currentVersion(.python)
+        try writeGalleryState(python: installer.currentVersion(.python) ?? "", gallery: now, previous: changed ? previous : nil)
+        if changed {
+            await log.append(previous.map { "gallery-dl \($0) → \(now) (sağlık kontrolü geçti)" } ?? "gallery-dl \(now) kuruldu (sağlık kontrolü geçti)")
+        }
+        return changed
     }
 
     /// pip'in ürettiği betiklerin shebang'i mutlak yola bağlıdır; sürüm klasörü değişince bozulmaması için sabit bir sarmalayıcı kullanılır.
