@@ -18,6 +18,34 @@ public actor Downloader {
 
     public func fetchInfo(_ r: DownloadRequest) async throws(UserFacingError) -> FetchResult {
         lastErrorOutput = ""
+        return try await withCookieFallback(r) { (r) async throws(UserFacingError) -> FetchResult in try await self.fetchInfoOnce(r) }
+    }
+
+    public func download(_ r: DownloadRequest,
+                         progress: @escaping @Sendable (DownloadProgress) -> Void) async throws(UserFacingError) -> [URL] {
+        lastErrorOutput = ""
+        try ensureDestination(r.destination)
+        return try await withCookieFallback(r) { (r) async throws(UserFacingError) -> [URL] in try await self.downloadOnce(r, progress: progress) }
+    }
+
+    /// Önce çerezsiz dener; site giriş isterse bir kez de tarayıcı çerezleriyle dener.
+    private func withCookieFallback<T>(_ r: DownloadRequest,
+                                       _ op: (DownloadRequest) async throws(UserFacingError) -> T) async throws(UserFacingError) -> T {
+        if r.useCookies { return try await op(r) }
+        do {
+            return try await op(r)
+        } catch {
+            switch error {
+            case .cancelled, .noInternet, .destinationNotWritable, .unsupportedLink: throw error
+            default: break
+            }
+            var withCookies = r
+            withCookies.useCookies = true
+            return try await op(withCookies)
+        }
+    }
+
+    private func fetchInfoOnce(_ r: DownloadRequest) async throws(UserFacingError) -> FetchResult {
         let result = try await execute(tools.ytdlp, CommandBuilder.infoArguments(r, tools: tools), onLine: { _ in })
         if result.exitCode != 0 {
             if r.site == .instagram, Self.hasNoVideo(result.stderr) { return .images }
@@ -30,11 +58,8 @@ public actor Downloader {
         }
     }
 
-    public func download(_ r: DownloadRequest,
-                         progress: @escaping @Sendable (DownloadProgress) -> Void) async throws(UserFacingError) -> [URL] {
-        lastErrorOutput = ""
-        try ensureDestination(r.destination)
-
+    private func downloadOnce(_ r: DownloadRequest,
+                              progress: @escaping @Sendable (DownloadProgress) -> Void) async throws(UserFacingError) -> [URL] {
         if r.format == .images { return try await runGalleryDL(r, prior: []) }
 
         let paths = LockedList()

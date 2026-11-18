@@ -13,7 +13,16 @@ import Foundation
         let link = site == .instagram ? "https://www.instagram.com/reel/XYZ/" : "https://youtu.be/abc"
         return DownloadRequest(url: URL(string: link)!, site: site, format: format,
                                destination: URL(fileURLWithPath: "/Users/x/Downloads/MedyaIndirici"),
-                               browser: browser)
+                               browser: browser, useCookies: true)
+    }
+
+    @Test func noCookiesUnlessRequested() {
+        var r = request(.youtube, .video(maxHeight: nil))
+        r.useCookies = false
+        #expect(!CommandBuilder.ytdlpArguments(r, tools: tools).contains("--cookies-from-browser"))
+        #expect(!CommandBuilder.infoArguments(r, tools: tools).contains("--cookies-from-browser"))
+        r.format = .images
+        #expect(!CommandBuilder.galleryDLArguments(r).contains("--cookies-from-browser"))
     }
 
     func contains(_ args: [String], _ sub: [String]) -> Bool {

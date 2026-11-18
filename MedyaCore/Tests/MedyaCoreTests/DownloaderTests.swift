@@ -54,6 +54,57 @@ final class ProgressBox: @unchecked Sendable {
     let isYtdlp: @Sendable (URL, [String]) -> Bool = { u, _ in u.lastPathComponent == "yt-dlp" }
     let isGallery: @Sendable (URL, [String]) -> Bool = { u, _ in u.lastPathComponent == "gallery-dl" }
 
+    @Test func triesWithoutCookiesFirstThenRetriesWithCookies() async throws {
+        let dir = try tempDir()
+        let file = try touch("v.mp4", in: dir)
+        let noCookies: @Sendable (URL, [String]) -> Bool = { u, a in u.lastPathComponent == "yt-dlp" && !a.contains("--cookies-from-browser") }
+        let withCookies: @Sendable (URL, [String]) -> Bool = { u, a in u.lastPathComponent == "yt-dlp" && a.contains("--cookies-from-browser") }
+        let runner = FakeRunner([
+            .init(matches: noCookies, result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: [youtube] abc: Sign in to confirm your age")),
+            .init(matches: withCookies, lines: [file.path], result: ProcessResult(exitCode: 0, stdout: "", stderr: "")),
+        ])
+        let d = Downloader(runner: runner, tools: tools)
+        let files = try await d.download(request(.youtube, .video(maxHeight: nil), dest: dir)) { _ in }
+        #expect(files == [file])
+        #expect(runner.calls.count == 2)
+        #expect(!runner.calls[0].1.contains("--cookies-from-browser"))
+        #expect(runner.calls[1].1.contains("--cookies-from-browser"))
+    }
+
+    @Test func successWithoutCookiesNeverTouchesBrowser() async throws {
+        let dir = try tempDir()
+        let file = try touch("v.mp4", in: dir)
+        let runner = FakeRunner([.init(matches: isYtdlp, lines: [file.path], result: ProcessResult(exitCode: 0, stdout: "", stderr: ""))])
+        let d = Downloader(runner: runner, tools: tools)
+        _ = try await d.download(request(.youtube, .audio(kbps: 128), dest: dir)) { _ in }
+        #expect(runner.calls.count == 1)
+        #expect(!runner.calls[0].1.contains("--cookies-from-browser"))
+    }
+
+    @Test func noInternetDoesNotRetryWithCookies() async throws {
+        let dir = try tempDir()
+        let runner = FakeRunner([.init(matches: isYtdlp, result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: Unable to download webpage: <urlopen error [Errno 8] nodename nor servname provided>"))])
+        let d = Downloader(runner: runner, tools: tools)
+        await #expect(throws: UserFacingError.noInternet) { _ = try await d.download(request(.youtube, .audio(kbps: 128), dest: dir)) { _ in } }
+        #expect(runner.calls.count == 1)
+    }
+
+    @Test func cookieRetryBlockedByMacOSNeedsFullDiskAccess() async throws {
+        let dir = try tempDir()
+        let runner = FakeRunner([
+            .init(matches: { u, a in !a.contains("--cookies-from-browser") }, result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: [Instagram] X: Requested content is not available, rate-limit reached or login required")),
+            .init(matches: { u, a in a.contains("--cookies-from-browser") }, result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: could not find chrome cookies database in \"/Users/x/Library/Application Support/Google/Chrome\"")),
+        ])
+        let d = Downloader(runner: runner, tools: tools)
+        do {
+            _ = try await d.fetchInfo(request(.instagram, .video(maxHeight: nil), dest: dir))
+            Issue.record("hata bekleniyordu")
+        } catch {
+            #expect(error == .browserCookiesUnavailable(.chrome))
+            #expect(error.needsFullDiskAccess)
+        }
+    }
+
     @Test func ytdlpSuccessReportsProgressAndReturnsFile() async throws {
         let dir = try tempDir()
         let file = try touch("v.mp4", in: dir)

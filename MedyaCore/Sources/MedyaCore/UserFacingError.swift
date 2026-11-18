@@ -27,13 +27,21 @@ public enum UserFacingError: Error, Equatable, Sendable {
         case .safariNeedsFullDiskAccess:
             "Safari'nin çerezlerini okuyabilmek için \(AppIdentity.displayName) uygulamasına Tam Disk Erişimi vermen gerekiyor. Sistem Ayarları > Gizlilik ve Güvenlik > Tam Disk Erişimi bölümünden uygulamayı aç, sonra uygulamayı kapatıp yeniden başlat."
         case .browserCookiesUnavailable(let b):
-            "\(b.displayName) çerezleri okunamadı. \(b.displayName) kurulu olmalı ve en az bir kez açılmış olmalı; olmuyorsa Ayarlar'dan başka bir tarayıcı seç."
+            "Bu bağlantı için \(b.displayName) hesabındaki girişin gerekiyor, ama macOS \(b.displayName) verilerine erişime izin vermedi. Sistem Ayarları > Gizlilik ve Güvenlik > Tam Disk Erişimi bölümünde \(AppIdentity.displayName) uygulamasını aç, sonra uygulamayı yeniden başlat."
         case .unsupportedLink:
             "Bu bağlantı desteklenmiyor. Videonun ya da gönderinin doğrudan linkini yapıştırmayı dene."
         case .cancelled:
             "İndirme iptal edildi."
         case .unknown:
             "Beklenmeyen bir sorun oluştu. \"Ayrıntıları göster\" ile hata metnini kopyalayıp iletebilirsin."
+        }
+    }
+
+    /// Kullanıcının Tam Disk Erişimi vermesiyle çözülen hatalar ("Ayarları Aç" düğmesi için).
+    public var needsFullDiskAccess: Bool {
+        switch self {
+        case .safariNeedsFullDiskAccess, .browserCookiesUnavailable: true
+        default: false
         }
     }
 

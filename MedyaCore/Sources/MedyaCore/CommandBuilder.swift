@@ -2,7 +2,7 @@ import Foundation
 
 public enum CommandBuilder {
     public static func infoArguments(_ r: DownloadRequest, tools: ToolPaths) -> [String] {
-        var args = ["--cookies-from-browser", r.browser.rawValue, "--no-playlist", "-J"]
+        var args = cookieArguments(r) + ["--no-playlist", "-J"]
         if r.site == .youtube {
             args += ["--remote-components", "ejs:github", "--js-runtimes", "deno:\(tools.deno.path)"]
         }
@@ -11,8 +11,7 @@ public enum CommandBuilder {
     }
 
     public static func ytdlpArguments(_ r: DownloadRequest, tools: ToolPaths) -> [String] {
-        var args = [
-            "--cookies-from-browser", r.browser.rawValue,
+        var args = cookieArguments(r) + [
             "--no-playlist",
             "--ffmpeg-location", tools.ffmpegDir.path,
             "--newline",
@@ -41,6 +40,10 @@ public enum CommandBuilder {
     }
 
     public static func galleryDLArguments(_ r: DownloadRequest) -> [String] {
-        ["--cookies-from-browser", r.browser.rawValue, "-D", r.destination.path, r.url.absoluteString]
+        cookieArguments(r) + ["-D", r.destination.path, r.url.absoluteString]
+    }
+
+    private static func cookieArguments(_ r: DownloadRequest) -> [String] {
+        r.useCookies ? ["--cookies-from-browser", r.browser.rawValue] : []
     }
 }

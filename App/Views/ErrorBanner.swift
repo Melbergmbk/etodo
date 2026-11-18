@@ -19,12 +19,22 @@ struct ErrorBanner: View {
                         .font(.system(size: 12.5))
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
-                    if !detailText.isEmpty {
-                        Button(showDetails ? "Ayrıntıları gizle" : "Ayrıntıları göster") {
-                            showDetails.toggle()
+                    HStack(spacing: 14) {
+                        if error.error.needsFullDiskAccess {
+                            Button("Ayarları Aç") {
+                                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            }
+                            .controlSize(.small)
                         }
-                        .buttonStyle(.link)
-                        .font(.system(size: 12))
+                        if !detailText.isEmpty {
+                            Button(showDetails ? "Ayrıntıları gizle" : "Ayrıntıları göster") {
+                                showDetails.toggle()
+                            }
+                            .buttonStyle(.link)
+                            .font(.system(size: 12))
+                        }
                     }
                 }
                 Spacer(minLength: 0)

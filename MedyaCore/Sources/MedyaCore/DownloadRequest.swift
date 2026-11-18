@@ -26,13 +26,16 @@ public struct DownloadRequest: Sendable {
     public var format: MediaFormat
     public var destination: URL
     public var browser: Browser
+    /// Tarayıcı çerezleri yalnız gerektiğinde okunur; macOS diğer uygulamaların verisine erişimi kısıtlıyor.
+    public var useCookies: Bool
 
-    public init(url: URL, site: Site, format: MediaFormat, destination: URL, browser: Browser) {
+    public init(url: URL, site: Site, format: MediaFormat, destination: URL, browser: Browser, useCookies: Bool = false) {
         self.url = url
         self.site = site
         self.format = format
         self.destination = destination
         self.browser = browser
+        self.useCookies = useCookies
     }
 }
 
