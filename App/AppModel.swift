@@ -4,9 +4,16 @@ import MedyaCore
 
 enum ToolsState: Equatable {
     case checking
-    case preparing(Double)
+    /// İlk kurulum (ya da eksik araç) — `SetupView`.
+    case preparing
     case ready
     case failed
+}
+
+/// Ayarlar › Araçlar'da süren iş.
+enum ToolAction: Equatable {
+    case updating
+    case rollingBack(ToolKind)
 }
 
 enum PreviewState: Equatable {
@@ -39,9 +46,26 @@ struct ShownError: Equatable {
 @Observable
 final class AppModel {
     static let browserKey = "browser"
+    static let disclaimerKey = "disclaimerAccepted"
     static let audioRates = [320, 192, 128]
 
+    private(set) var disclaimerAccepted: Bool
     private(set) var toolsState: ToolsState = .checking
+    /// Kurulumda sırayla kurulan araçlar ve her birinin ilerlemesi (0…1).
+    private(set) var setupKinds: [ToolKind] = []
+    private(set) var setupProgress: [ToolKind: Double] = [:]
+    /// Kendiliğinden kaybolan kısa bildirim.
+    private(set) var toast: String?
+    var browser: Browser {
+        didSet { defaults.set(browser.rawValue, forKey: Self.browserKey) }
+    }
+
+    // Ayarlar › Araçlar
+    private(set) var toolStatuses: [ToolStatus] = []
+    private(set) var activity: [ActivityEntry] = []
+    private(set) var lastToolCheck: Date?
+    private(set) var toolAction: ToolAction?
+    var toolsError: ShownError?
     private(set) var site: Site?
     var link = "" {
         didSet { if link != oldValue { linkChanged() } }
@@ -59,6 +83,7 @@ final class AppModel {
     @ObservationIgnored private var downloader: Downloader?
     @ObservationIgnored private var fetchTask: Task<Void, Never>?
     @ObservationIgnored private var downloadTask: Task<Void, Never>?
+    @ObservationIgnored private var toastTask: Task<Void, Never>?
     @ObservationIgnored private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -68,6 +93,24 @@ final class AppModel {
         let saved = (defaults.stringArray(forKey: "recentFolders") ?? []).map { URL(fileURLWithPath: $0, isDirectory: true) }
         recentFolders = saved.isEmpty ? [fallback] : saved
         destination = defaults.string(forKey: "destination").map { URL(fileURLWithPath: $0, isDirectory: true) } ?? fallback
+        disclaimerAccepted = defaults.bool(forKey: Self.disclaimerKey)
+        browser = Browser(rawValue: defaults.string(forKey: Self.browserKey) ?? "") ?? Self.systemDefaultBrowser()
+    }
+
+    /// Sistemin varsayılan tarayıcısı desteklenenlerdense o, değilse Chrome.
+    static func systemDefaultBrowser() -> Browser {
+        guard let https = URL(string: "https://example.com"),
+              let app = NSWorkspace.shared.urlForApplication(toOpen: https),
+              let id = Bundle(url: app)?.bundleIdentifier?.lowercased() else { return .chrome }
+        let known: [String: Browser] = ["com.google.chrome": .chrome, "com.apple.safari": .safari,
+                                        "com.brave.browser": .brave, "org.mozilla.firefox": .firefox,
+                                        "com.microsoft.edgemac": .edge]
+        return known[id] ?? .chrome
+    }
+
+    func acceptDisclaimer() {
+        defaults.set(true, forKey: Self.disclaimerKey)
+        disclaimerAccepted = true
     }
 
     // MARK: Türetilmiş durum
@@ -92,31 +135,37 @@ final class AppModel {
         return []
     }
 
-    private var browser: Browser {
-        Browser(rawValue: defaults.string(forKey: Self.browserKey) ?? "") ?? .chrome
-    }
-
     // MARK: Araçlar
 
+    static let supportFolder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent(AppIdentity.folderName, isDirectory: true)
+
+    @ObservationIgnored private let runner = SystemProcessRunner()
+
+    private func manager() -> ToolManager {
+        if let tools { return tools }
+        let m = ToolManager(root: Self.supportFolder, fetcher: URLSessionFetcher(), runner: runner,
+                            arch: ToolManager.currentArch())
+        tools = m
+        return m
+    }
+
+    /// Eksik araç varsa kurar (`SetupView`), sonra ana pencereye geçer; kurulum olmadıysa arka planda güncelleme denetler.
     func prepareTools() async {
-        guard toolsState == .checking || toolsState == .failed else { return }
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(AppIdentity.folderName, isDirectory: true)
-        let runner = SystemProcessRunner()
-        let manager = tools ?? ToolManager(root: support, fetcher: URLSessionFetcher(), runner: runner,
-                                           arch: ToolManager.currentArch())
-        tools = manager
+        guard disclaimerAccepted, toolsState == .checking || toolsState == .failed else { return }
+        let manager = manager()
 
         let missing = await manager.status().filter { !$0.isReady }.map(\.kind)
         if !missing.isEmpty {
-            toolsState = .preparing(0)
+            setupKinds = missing
+            setupProgress = [:]
+            error = nil
+            toolsState = .preparing
             let (stream, continuation) = AsyncStream.makeStream(of: (ToolKind, Double).self)
-            let order = missing
             let consumer = Task { @MainActor [weak self] in
                 for await (kind, value) in stream {
-                    guard let self, let index = order.firstIndex(of: kind) else { continue }
-                    let overall = (Double(index) + value) / Double(order.count)
-                    if case .preparing(let old) = self.toolsState, overall > old { self.toolsState = .preparing(overall) }
+                    guard let self else { continue }
+                    if value > self.setupProgress[kind, default: 0] { self.setupProgress[kind] = value }
                 }
             }
             do throws(UserFacingError) {
@@ -134,6 +183,63 @@ final class AppModel {
         downloader = Downloader(runner: runner, tools: await manager.paths)
         error = nil
         toolsState = .ready
+        await refreshToolInfo()
+        if missing.isEmpty {
+            Task { await self.updateTools(announce: true) }
+        }
+    }
+
+    /// Ayarlar › Araçlar için durum, kayıt ve son kontrol.
+    func refreshToolInfo() async {
+        let manager = manager()
+        toolStatuses = await manager.status()
+        activity = await manager.log.entries()
+        lastToolCheck = await manager.lastCheck()
+    }
+
+    func updateToolsNow() {
+        guard toolAction == nil else { return }
+        Task { await updateTools(announce: false) }
+    }
+
+    private func updateTools(announce: Bool) async {
+        guard toolAction == nil else { return }
+        toolAction = .updating
+        toolsError = nil
+        let updated = await manager().updateAll()
+        toolAction = nil
+        await refreshToolInfo()
+        if announce, !updated.isEmpty { showToast("İndirme araçları güncellendi") }
+    }
+
+    func rollback(_ kind: ToolKind) {
+        guard toolAction == nil else { return }
+        toolAction = .rollingBack(kind)
+        toolsError = nil
+        Task {
+            do throws(UserFacingError) {
+                try await manager().rollback(kind)
+            } catch {
+                toolsError = ShownError(error: error, details: "")
+            }
+            toolAction = nil
+            await refreshToolInfo()
+        }
+    }
+
+    func revealToolsFolder() {
+        let folder = Self.supportFolder.appendingPathComponent("tools", isDirectory: true)
+        NSWorkspace.shared.activateFileViewerSelecting([FileManager.default.fileExists(atPath: folder.path) ? folder : Self.supportFolder])
+    }
+
+    private func showToast(_ text: String) {
+        toastTask?.cancel()
+        toast = text
+        toastTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            self?.toast = nil
+        }
     }
 
     // MARK: Sekme ve link
@@ -222,6 +328,7 @@ final class AppModel {
             await consumer.value
             phase = .done(files)
             remember(request.destination)
+            await logDownload(files)
         } catch {
             continuation.finish()
             consumer.cancel()
@@ -274,6 +381,16 @@ final class AppModel {
             await tools.endDownload()
             throw error
         }
+    }
+
+    /// Yalnız dosya adı yazılır; link ya da tam yol kaydedilmez.
+    private func logDownload(_ files: [URL]) async {
+        guard let tools, let first = files.first else { return }
+        let text = files.count == 1
+            ? "İndirildi: \(first.lastPathComponent)"
+            : "İndirildi: \(files.count) dosya (\(first.deletingLastPathComponent().lastPathComponent))"
+        await tools.log.append(text)
+        activity = await tools.log.entries()
     }
 
     // MARK: Kayıt yeri
@@ -331,6 +448,7 @@ extension AppModel {
                         phase: DownloadPhase = .idle, error: ShownError? = nil,
                         tools: ToolsState = .ready) -> AppModel {
         let model = AppModel(defaults: UserDefaults(suiteName: "preview") ?? .standard)
+        model.disclaimerAccepted = true
         model.toolsState = tools
         model.site = site
         model.link = link

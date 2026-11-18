@@ -126,9 +126,11 @@ extension PreviewCard {
     }
 }
 
+/// Zamana bağlı parıltı; `repeatForever` kullanılmaz, böylece animasyon başka görünümlere sızmaz
+/// ve iskelet kaldırıldığında arkada iz kalmaz.
 private struct Shimmer: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var phase: CGFloat = -1
+    @State private var start = Date()
 
     func body(content: Content) -> some View {
         if reduceMotion {
@@ -136,18 +138,19 @@ private struct Shimmer: ViewModifier {
         } else {
             content
                 .overlay {
-                    GeometryReader { geo in
-                        LinearGradient(colors: [.clear, .white.opacity(0.45), .clear],
-                                       startPoint: .leading, endPoint: .trailing)
-                            .frame(width: geo.size.width * 0.45)
-                            .offset(x: geo.size.width * (-0.45 + (phase + 1) / 2 * 1.45))
-                            .blendMode(.plusLighter)
+                    TimelineView(.animation) { context in
+                        let period = 1.3
+                        let t = context.date.timeIntervalSince(start).truncatingRemainder(dividingBy: period) / period
+                        GeometryReader { geo in
+                            LinearGradient(colors: [.clear, .white.opacity(0.45), .clear],
+                                           startPoint: .leading, endPoint: .trailing)
+                                .frame(width: geo.size.width * 0.45)
+                                .offset(x: geo.size.width * (-0.45 + t * 1.45))
+                                .blendMode(.plusLighter)
+                        }
                     }
                     .mask(content)
                     .allowsHitTesting(false)
-                }
-                .onAppear {
-                    withAnimation(.linear(duration: 1.3).repeatForever(autoreverses: false)) { phase = 1 }
                 }
         }
     }

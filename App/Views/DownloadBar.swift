@@ -21,6 +21,9 @@ struct DownloadBar: View {
                 Text("Hepsi tek klasöre, orijinal kalitede iner.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
+            } else {
+                // Boş görünüm yer kaplamaz; düğme sağda kalsın diye esnek bir boşluk.
+                Color.clear.frame(height: 1)
             }
         case .starting:
             progress(nil, left: "İndirme başlıyor…", right: "")

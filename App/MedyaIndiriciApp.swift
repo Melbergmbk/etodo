@@ -10,9 +10,13 @@ struct MedyaIndiriciApp: App {
 
     var body: some Scene {
         Window(AppIdentity.displayName, id: "main") {
-            MainView(model: model)
+            RootView(model: model)
         }
         .windowResizability(.contentSize)
+
+        Settings {
+            SettingsView(model: model)
+        }
     }
 }
 
