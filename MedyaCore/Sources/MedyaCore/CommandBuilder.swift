@@ -25,7 +25,7 @@ public enum CommandBuilder {
         switch r.format {
         case .video(let height):
             let selector = height.map { "bv*[height<=\($0)]+ba/b[height<=\($0)]" } ?? "bv*+ba/b"
-            args += ["-f", selector, "--merge-output-format", "mp4", "-S", "vcodec:h264,res,acodec:m4a"]
+            args += ["-f", selector, "--merge-output-format", "mp4", "-S", "res,vcodec:h264,acodec:m4a"]
         case .audio(let kbps):
             args += ["-x", "--audio-format", "mp3", "--audio-quality", "\(kbps)K"]
         case .images:

@@ -19,6 +19,8 @@ public struct MediaInfo: Sendable, Equatable {
         struct Format: Decodable {
             var height: Int?
             var vcodec: String?
+            var ext: String?
+            var format_note: String?
         }
         var id: String?
         var title: String?
@@ -32,7 +34,8 @@ public struct MediaInfo: Sendable, Equatable {
         let raw = try JSONDecoder().decode(Raw.self, from: data)
         // vcodec "none" ses akışı ve storyboard (önizleme şeridi) kayıtlarını eler
         let heights = (raw.formats ?? []).compactMap { f -> Int? in
-            guard let h = f.height, h > 0, let codec = f.vcodec, codec != "none" else { return nil }
+            guard let h = f.height, h > 0, f.vcodec != "none" else { return nil }
+            if f.ext == "mhtml" || f.format_note?.lowercased().contains("storyboard") == true { return nil }
             return h
         }
         return MediaInfo(

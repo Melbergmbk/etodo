@@ -12,14 +12,18 @@ public enum Site: String, CaseIterable, Sendable {
 
     public static func normalizedURL(_ raw: String) -> URL? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard var components = URLComponents(string: trimmed),
+        let parsed = URLComponents(string: trimmed)
+            ?? trimmed.addingPercentEncoding(withAllowedCharacters: encodingAllowed).flatMap(URLComponents.init(string:))
+        guard var components = parsed,
               let scheme = components.scheme?.lowercased(),
               scheme == "http" || scheme == "https",
               let host = components.host, !host.isEmpty
         else { return nil }
-        if let items = components.queryItems {
-            let kept = items.filter { !isTracking($0.name) }
-            components.queryItems = kept.isEmpty ? nil : kept
+        if let items = components.percentEncodedQueryItems {
+            let kept = items.filter { !isTracking($0.name.removingPercentEncoding ?? $0.name) }
+            if kept.count != items.count {
+                components.percentEncodedQueryItems = kept.isEmpty ? nil : kept
+            }
         }
         return components.url
     }
@@ -28,6 +32,13 @@ public enum Site: String, CaseIterable, Sendable {
         guard let first = url.pathComponents.dropFirst().first?.lowercased() else { return false }
         return ["p", "reel", "reels", "tv"].contains(first)
     }
+
+    private static let encodingAllowed: CharacterSet = {
+        var set = CharacterSet.urlFragmentAllowed
+        set.formUnion(.urlQueryAllowed)
+        set.insert("%")
+        return set
+    }()
 
     private static func matches(_ host: String, _ domain: String) -> Bool {
         host == domain || host.hasSuffix("." + domain)

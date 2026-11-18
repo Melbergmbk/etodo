@@ -47,13 +47,13 @@ public enum UserFacingError: Error, Equatable, Sendable {
         if text.range(of: #"could not find .* cookies database"#, options: .regularExpression) != nil {
             return .browserCookiesUnavailable(browser)
         }
-        if has("unable to download webpage") && has("errno 8", "nodename nor servname") { return .noInternet }
+        if has("unable to download") && has("errno 8", "nodename nor servname", "errno 51", "network is unreachable", "errno 65", "no route to host", "timed out") { return .noInternet }
         if has("unsupported url") { return .unsupportedLink }
-        if has("login required", "rate-limit reached") || (has("requested content is not available") && has("instagram")) {
+        if has("instagram") && has("login required", "rate-limit reached", "requested content is not available") {
             return .instagramLoginRequired(browser)
         }
         if has("http error 403", "sign in to confirm", "nsig extraction failed") { return .needsToolUpdate }
-        if has("private", "404") { return .privateOrDeleted }
+        if has("private video", "http error 404", "video unavailable") { return .privateOrDeleted }
         return .unknown(details: stderr.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 }

@@ -60,7 +60,7 @@ import Foundation
         let a = CommandBuilder.ytdlpArguments(request(.youtube, .video(maxHeight: 720)), tools: tools)
         #expect(contains(a, ["-f", "bv*[height<=720]+ba/b[height<=720]"]))
         #expect(contains(a, ["--merge-output-format", "mp4"]))
-        #expect(contains(a, ["-S", "vcodec:h264,res,acodec:m4a"]))
+        #expect(contains(a, ["-S", "res,vcodec:h264,acodec:m4a"]))
     }
 
     @Test func videoBest() {

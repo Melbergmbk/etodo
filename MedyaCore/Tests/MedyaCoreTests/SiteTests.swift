@@ -44,6 +44,18 @@ import Foundation
         #expect(Site.detect("  https://youtu.be/abc  \n") == .youtube)
     }
 
+    @Test func preservesEncodedQueryBytes() throws {
+        let link = "https://example.com/p?tok=a%2Bb%26c&igsh=1&x=%20y"
+        let url = try #require(Site.normalizedURL(link))
+        #expect(url.absoluteString == "https://example.com/p?tok=a%2Bb%26c&x=%20y")
+        let untouched = "https://example.com/p?tok=a%2Bb%26c"
+        #expect(Site.normalizedURL(untouched)?.absoluteString == untouched)
+    }
+
+    @Test func pastedNonASCIIWithSpaces() {
+        #expect(Site.detect("https://example.com/ö ğ") == .other)
+    }
+
     @Test func lookalikeHostsAreNotYouTube() {
         #expect(Site.detect("https://notyoutube.com/watch?v=1") == .other)
         #expect(Site.detect("https://youtube.com.evil.io/x") == .other)

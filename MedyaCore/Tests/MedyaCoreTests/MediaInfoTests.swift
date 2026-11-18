@@ -35,6 +35,18 @@ import Foundation
         #expect(info.availableHeights.isEmpty)
     }
 
+    @Test func missingVcodecCountsAsVideoButStoryboardsDoNot() throws {
+        let json = #"""
+        {"id":"a","formats":[
+          {"height":720},
+          {"height":90,"ext":"mhtml","format_note":"storyboard"},
+          {"height":45,"vcodec":"none"},
+          {"height":480,"vcodec":"avc1"}]}
+        """#
+        let info = try MediaInfo.parse(Data(json.utf8))
+        #expect(info.availableHeights == [720, 480])
+    }
+
     @Test func invalidJSONThrows() {
         #expect(throws: (any Error).self) { try MediaInfo.parse(Data("not json".utf8)) }
     }

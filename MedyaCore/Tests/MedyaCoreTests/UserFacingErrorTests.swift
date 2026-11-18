@@ -58,6 +58,27 @@ import Testing
         #expect(UserFacingError.noInternet.details == nil)
     }
 
+    @Test func privatePathsAnd404SubstringsAreNotPrivateErrors() {
+        #expect(classify("ERROR: something broke in /private/var/folders/x/T/tmp") == .unknown(details: "ERROR: something broke in /private/var/folders/x/T/tmp"))
+        #expect(classify("ERROR: bad item 14040 of list") == .unknown(details: "ERROR: bad item 14040 of list"))
+        #expect(classify("ERROR: [youtube] abc: Video unavailable") == .privateOrDeleted)
+    }
+
+    @Test func loginRequiredOnlyForInstagram() {
+        #expect(classify("ERROR: [twitter] 123: login required") != .instagramLoginRequired(.chrome))
+        #expect(classify("ERROR: [twitter] 123: rate-limit reached") != .instagramLoginRequired(.chrome))
+    }
+
+    @Test(arguments: [
+        "Unable to download JSON metadata: [Errno 51] Network is unreachable",
+        "Unable to download video data: <urlopen error [Errno 65] No route to host>",
+        "ERROR: Unable to download webpage: The read operation timed out",
+        "ERROR: unable to download video data: <urlopen error [Errno 8] nodename nor servname provided>",
+    ])
+    func noInternetVariants(_ s: String) {
+        #expect(classify(s) == .noInternet)
+    }
+
     @Test func caseInsensitive() {
         #expect(classify("UNSUPPORTED url: x") == .unsupportedLink)
     }
