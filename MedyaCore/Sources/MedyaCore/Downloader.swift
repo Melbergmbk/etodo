@@ -28,21 +28,26 @@ public actor Downloader {
         return try await withCookieFallback(r) { (r) async throws(UserFacingError) -> [URL] in try await self.downloadOnce(r, progress: progress) }
     }
 
-    /// Önce çerezsiz dener; site giriş isterse bir kez de tarayıcı çerezleriyle dener.
+    /// Önce çerezsiz dener; yalnız giriş gerektiren hatalarda bir kez de tarayıcı çerezleriyle dener.
+    /// (Silinmiş video gibi girişin çözemeyeceği hatalarda gerçek hata gösterilir.)
     private func withCookieFallback<T>(_ r: DownloadRequest,
                                        _ op: (DownloadRequest) async throws(UserFacingError) -> T) async throws(UserFacingError) -> T {
         if r.useCookies { return try await op(r) }
         do {
             return try await op(r)
         } catch {
-            switch error {
-            case .cancelled, .noInternet, .destinationNotWritable, .unsupportedLink: throw error
-            default: break
-            }
+            guard error != .cancelled, Self.loginMightHelp(lastErrorOutput) else { throw error }
             var withCookies = r
             withCookies.useCookies = true
             return try await op(withCookies)
         }
+    }
+
+    static func loginMightHelp(_ stderr: String) -> Bool {
+        let t = stderr.lowercased()
+        return ["login", "log in", "sign in", "authenticat", "cookies", "private", "rate-limit",
+                "requested content is not available", "confirm your age", "age-restricted", "age restricted",
+                "members-only", "members only"].contains { t.contains($0) }
     }
 
     private func fetchInfoOnce(_ r: DownloadRequest) async throws(UserFacingError) -> FetchResult {

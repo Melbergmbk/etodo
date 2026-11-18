@@ -90,6 +90,34 @@ final class ProgressBox: @unchecked Sendable {
         #expect(runner.calls.count == 1)
     }
 
+    @Test(arguments: [
+        ("ERROR: [youtube] abc: Video unavailable. This video has been removed by the uploader", UserFacingError.privateOrDeleted),
+        ("ERROR: HTTP Error 403: Forbidden", UserFacingError.needsToolUpdate),
+        ("ERROR: Unsupported URL: https://example.com/x", UserFacingError.unsupportedLink),
+    ])
+    func errorsLoginCannotFixAreShownWithoutCookieRetry(stderr: String, expected: UserFacingError) async throws {
+        let dir = try tempDir()
+        let runner = FakeRunner([.init(matches: isYtdlp, result: ProcessResult(exitCode: 1, stdout: "", stderr: stderr))])
+        let d = Downloader(runner: runner, tools: tools)
+        await #expect(throws: expected) { _ = try await d.download(request(.youtube, .video(maxHeight: nil), dest: dir)) { _ in } }
+        #expect(runner.calls.count == 1)
+    }
+
+    @Test(arguments: [
+        "ERROR: [youtube] abc: Private video. Sign in if you've been granted access to this video",
+        "ERROR: [youtube] abc: Sign in to confirm you’re not a bot",
+        "[instagram][error] HTTP redirect to login page (https://www.instagram.com/accounts/login/)",
+        "ERROR: [twitter] 1: NSFW tweet requires authentication",
+    ])
+    func loginTypeErrorsRetryWithCookies(stderr: String) async throws {
+        let dir = try tempDir()
+        let runner = FakeRunner([.init(matches: { _, _ in true }, result: ProcessResult(exitCode: 1, stdout: "", stderr: stderr))])
+        let d = Downloader(runner: runner, tools: tools)
+        _ = try? await d.download(request(.youtube, .video(maxHeight: nil), dest: dir)) { _ in }
+        #expect(runner.calls.count == 2)
+        #expect(runner.calls[1].1.contains("--cookies-from-browser"))
+    }
+
     @Test func cookieRetryBlockedByMacOSNeedsFullDiskAccess() async throws {
         let dir = try tempDir()
         let runner = FakeRunner([
