@@ -57,6 +57,20 @@ import Testing
                 == .instagramLoginRequired(.chrome))
     }
 
+    @Test func missingBrowserIsNotAPermissionProblem() {
+        let e = classify("ERROR: could not find chrome cookies database in \"/Users/x/Library/Application Support/Google/Chrome\"", .chrome)
+        #expect(e == .browserCookiesUnavailable(.chrome))
+        #expect(!e.needsFullDiskAccess)
+        #expect(e.message.contains("Chrome bu Mac'te bulunamadı"))
+        #expect(UserFacingError.safariNeedsFullDiskAccess.needsFullDiskAccess)
+    }
+
+    @Test func ageRestricted() {
+        #expect(classify("ERROR: [youtube] abc: Sign in to confirm your age. This video may be inappropriate for some users.", .safari)
+                == .ageRestricted(.safari))
+        #expect(classify("ERROR: [youtube] abc: Sign in to confirm you're not a bot") == .needsToolUpdate)
+    }
+
     @Test func unsupportedLink() {
         #expect(classify("ERROR: Unsupported URL: https://example.com/foo") == .unsupportedLink)
     }
@@ -97,7 +111,7 @@ import Testing
         let all: [UserFacingError] = [
             .instagramLoginRequired(.chrome), .privateOrDeleted, .needsToolUpdate, .noInternet,
             .destinationNotWritable, .safariNeedsFullDiskAccess, .browserCookiesUnavailable(.edge),
-            .unsupportedLink, .unknown(details: "x"), .cancelled,
+            .unsupportedLink, .unknown(details: "x"), .cancelled, .ageRestricted(.chrome), .serverBusy,
         ]
         for e in all { #expect(!e.message.isEmpty) }
         #expect(UserFacingError.privateOrDeleted.message == "Bu gönderi görünmüyor; özel hesap ya da silinmiş olabilir.")

@@ -101,6 +101,14 @@ final class FakeFetcher: HTTPFetching, @unchecked Sendable {
         await #expect(throws: UserFacingError.self) { try await m.installMissing { _, _ in } }
     }
 
+    @Test(arguments: [403, 429, 503])
+    func githubLimitOrOutageSaysTryLater(_ code: Int) async throws {
+        let root = try tempRoot(), f = FakeFetcher()
+        f.failure = FetchError.badStatus(code)
+        let m = manager(root, f, runner())
+        await #expect(throws: UserFacingError.serverBusy) { try await m.installMissing { _, _ in } }
+    }
+
     @Test func failedHealthCheckKeepsOldVersion() async throws {
         let root = try tempRoot(), f = FakeFetcher()
         publishYtdlp(f, version: "v1")

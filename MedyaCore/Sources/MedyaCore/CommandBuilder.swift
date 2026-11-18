@@ -2,7 +2,7 @@ import Foundation
 
 public enum CommandBuilder {
     public static func infoArguments(_ r: DownloadRequest, tools: ToolPaths) -> [String] {
-        var args = cookieArguments(r) + ["--no-playlist", "-J"]
+        var args = cookieArguments(r) + ["--ignore-config", "--no-playlist", "-J"]
         if r.site == .youtube {
             args += ["--remote-components", "ejs:github", "--js-runtimes", "deno:\(tools.deno.path)"]
         }
@@ -12,6 +12,7 @@ public enum CommandBuilder {
 
     public static func ytdlpArguments(_ r: DownloadRequest, tools: ToolPaths) -> [String] {
         var args = cookieArguments(r) + [
+            "--ignore-config",
             "--no-playlist",
             "--ffmpeg-location", tools.ffmpegDir.path,
             "--newline",
@@ -41,6 +42,7 @@ public enum CommandBuilder {
 
     public static func galleryDLArguments(_ r: DownloadRequest) -> [String] {
         cookieArguments(r) + [
+            "--config-ignore",
             "-d", FolderLayout.root(in: r.destination).path,
             "-o", "directory=" + FolderLayout.galleryDLDirectory(r),
             r.url.absoluteString,

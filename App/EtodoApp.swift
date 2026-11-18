@@ -15,6 +15,11 @@ struct EtodoApp: App {
                 .onAppear { delegate.model = model }
         }
         .windowResizability(.contentSize)
+        .commands {
+            CommandGroup(before: .appSettings) {
+                Button("Güncellemeleri Kontrol Et…") { updates.checkForUpdates() }
+            }
+        }
 
         Settings {
             SettingsView(model: model)

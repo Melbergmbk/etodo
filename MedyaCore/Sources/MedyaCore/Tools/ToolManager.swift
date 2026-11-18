@@ -378,6 +378,8 @@ public actor ToolManager {
         if error is CancellationError { return .cancelled }
         if let e = error as? URLError, offlineCodes.contains(e.code) { return .noInternet }
         if case .unsafeRelease = error as? ToolError { return .needsToolUpdate }
+        // GitHub'ın kayıtsız sorgu sınırı (403/429) ya da sunucu arızası (5xx).
+        if case .badStatus(let code) = error as? FetchError, code == 403 || code == 429 || code >= 500 { return .serverBusy }
         return .unknown(details: String(describing: error))
     }
 }

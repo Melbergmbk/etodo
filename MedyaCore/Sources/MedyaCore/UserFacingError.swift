@@ -8,6 +8,8 @@ public enum UserFacingError: Error, Equatable, Sendable {
     case destinationNotWritable
     case safariNeedsFullDiskAccess
     case browserCookiesUnavailable(Browser)
+    case ageRestricted(Browser)
+    case serverBusy
     case unsupportedLink
     case cancelled
     case noPreviousVersion
@@ -28,7 +30,11 @@ public enum UserFacingError: Error, Equatable, Sendable {
         case .safariNeedsFullDiskAccess:
             "Safari'deki girişini kullanabilmek için \(AppIdentity.displayName) uygulamasına bir kez Tam Disk Erişimi vermen gerekiyor."
         case .browserCookiesUnavailable(let b):
-            "Bu bağlantı için \(b.locative)ki girişin gerekiyor, ama macOS buna izin vermedi. \(AppIdentity.displayName) uygulamasına bir kez Tam Disk Erişimi vermen yeterli."
+            "Bu bağlantı için tarayıcındaki giriş gerekiyor, ama \(b.displayName) bu Mac'te bulunamadı. Ayarlar'dan giriş yaptığın tarayıcıyı seç. Arc ya da Opera kullanıyorsan Chrome, Safari veya Firefox'ta siteye bir kez giriş yapman gerekir."
+        case .ageRestricted(let b):
+            "Bu video yaş sınırlı. İndirmek için \(b.locative) YouTube'a Google hesabınla giriş yapmış olmalısın."
+        case .serverBusy:
+            "Araçların indirildiği sunucu şu an yanıt vermiyor. Birkaç dakika sonra tekrar dene."
         case .unsupportedLink:
             "Bu bağlantı desteklenmiyor. Videonun ya da gönderinin doğrudan linkini yapıştırmayı dene."
         case .cancelled:
@@ -43,7 +49,7 @@ public enum UserFacingError: Error, Equatable, Sendable {
     /// Kullanıcının Tam Disk Erişimi vermesiyle çözülen hatalar ("Ayarları Aç" düğmesi için).
     public var needsFullDiskAccess: Bool {
         switch self {
-        case .safariNeedsFullDiskAccess, .browserCookiesUnavailable: true
+        case .safariNeedsFullDiskAccess: true
         default: false
         }
     }
@@ -66,6 +72,7 @@ public enum UserFacingError: Error, Equatable, Sendable {
         if has("instagram") && has("login required", "rate-limit reached", "requested content is not available", "redirect to login page") {
             return .instagramLoginRequired(browser)
         }
+        if has("confirm your age", "age-restricted", "age restricted") { return .ageRestricted(browser) }
         if has("http error 403", "sign in to confirm", "nsig extraction failed") { return .needsToolUpdate }
         if has("private video", "http error 404", "video unavailable") { return .privateOrDeleted }
         return .unknown(details: stderr.trimmingCharacters(in: .whitespacesAndNewlines))

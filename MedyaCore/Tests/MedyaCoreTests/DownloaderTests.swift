@@ -135,7 +135,7 @@ final class ProgressBox: @unchecked Sendable {
         #expect(!Browser.safari.usesKeychain && !Browser.firefox.usesKeychain)
     }
 
-    @Test func cookieRetryBlockedByMacOSNeedsFullDiskAccess() async throws {
+    @Test func cookieRetryWithMissingBrowserSaysBrowserNotFound() async throws {
         let dir = try tempDir()
         let runner = FakeRunner([
             .init(matches: { u, a in !a.contains("--cookies-from-browser") }, result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: [Instagram] X: Requested content is not available, rate-limit reached or login required")),
@@ -147,7 +147,7 @@ final class ProgressBox: @unchecked Sendable {
             Issue.record("hata bekleniyordu")
         } catch {
             #expect(error == .browserCookiesUnavailable(.chrome))
-            #expect(error.needsFullDiskAccess)
+            #expect(!error.needsFullDiskAccess)
         }
     }
 

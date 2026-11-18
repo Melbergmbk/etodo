@@ -75,6 +75,7 @@ import Foundation
     @Test func videoBest() {
         let a = CommandBuilder.ytdlpArguments(request(.youtube, .video(maxHeight: nil)), tools: tools)
         #expect(contains(a, ["-f", "bv*+ba/b"]))
+        #expect(a.contains("--ignore-config"))
     }
 
     @Test func infoArguments() {
@@ -83,6 +84,7 @@ import Foundation
         #expect(contains(a, ["--remote-components", "ejs:github"]))
         #expect(contains(a, ["--js-runtimes", "deno:/t/deno"]))
         #expect(a.contains("--no-playlist"))
+        #expect(a.contains("--ignore-config"))
         #expect(contains(a, ["--cookies-from-browser", "firefox"]))
         #expect(a.last == "https://youtu.be/abc")
     }
@@ -96,7 +98,7 @@ import Foundation
     @Test func galleryDL() {
         let r = request(.instagram, .images, browser: .brave)
         let a = CommandBuilder.galleryDLArguments(r)
-        #expect(a == ["--cookies-from-browser", "brave", "-d", "/Users/x/Downloads/Etodo",
+        #expect(a == ["--cookies-from-browser", "brave", "--config-ignore", "-d", "/Users/x/Downloads/Etodo",
                       "-o", "directory=" + FolderLayout.galleryDLDirectory(r),
                       "https://www.instagram.com/reel/XYZ/"])
         #expect(!a.contains("-D"))

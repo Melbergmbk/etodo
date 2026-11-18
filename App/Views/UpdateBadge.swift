@@ -6,7 +6,14 @@ struct UpdateBadge: View {
     let updates: UpdateController
 
     var body: some View {
-        switch updates.badge {
+        // Pencere günlerce açık kalabilir; "kontrol gecikti" durumu saatte bir yeniden hesaplanır.
+        TimelineView(.periodic(from: .now, by: 3600)) { context in
+            content(updates.badge(at: context.date))
+        }
+    }
+
+    @ViewBuilder private func content(_ state: UpdateBadgeState) -> some View {
+        switch state {
         case .hidden:
             EmptyView()
         case .updateAvailable:

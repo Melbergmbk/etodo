@@ -118,7 +118,7 @@ struct ToolInstaller: Sendable {
         _ = try? await runner.run(URL(fileURLWithPath: "/usr/bin/codesign"), ["--force", "-s", "-", exe.path], environment: [:], onLine: { _ in })
     }
 
-    /// `<araç> --version` 10 sn içinde 0 ile çıkmalı.
+    /// `<araç> --version` 30 sn içinde 0 ile çıkmalı (eski Intel Mac'te ilk açılış yavaş olabilir).
     func healthy(_ exe: URL, _ args: [String]) async -> Bool {
         let runner = self.runner
         return await withTaskGroup(of: Bool.self) { group in
@@ -126,7 +126,7 @@ struct ToolInstaller: Sendable {
                 (try? await runner.run(exe, args, environment: [:], onLine: { _ in }))?.exitCode == 0
             }
             group.addTask {
-                try? await Task.sleep(for: .seconds(10))
+                try? await Task.sleep(for: .seconds(30))
                 return false
             }
             let first = await group.next() ?? false

@@ -16,8 +16,8 @@ final class UpdateController: NSObject, SPUUpdaterDelegate {
         controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil)
     }
 
-    var badge: UpdateBadgeState {
-        UpdateSchedule.badge(appUpdateAvailable: appUpdateAvailable, lastSuccessfulCheck: lastSuccessfulCheck, now: Date())
+    func badge(at now: Date) -> UpdateBadgeState {
+        UpdateSchedule.badge(appUpdateAvailable: appUpdateAvailable, lastSuccessfulCheck: lastSuccessfulCheck, now: now)
     }
 
     func checkForUpdates() { controller?.checkForUpdates(nil) }
