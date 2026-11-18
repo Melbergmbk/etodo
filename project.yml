@@ -1,0 +1,29 @@
+name: MedyaIndirici
+options:
+  bundleIdPrefix: app.medyaindirici
+  deploymentTarget:
+    macOS: "14.0"
+packages:
+  MedyaCore:
+    path: MedyaCore
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.6.0
+targets:
+  MedyaIndirici:
+    type: application
+    platform: macOS
+    sources: [App]
+    dependencies:
+      - package: MedyaCore
+      - package: Sparkle
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.medyaindirici.mac
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        ARCHS: $(ARCHS_STANDARD)
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: NO
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
