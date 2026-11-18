@@ -72,7 +72,7 @@ public enum UserFacingError: Error, Equatable, Sendable {
     }
 }
 
-private extension Browser {
+public extension Browser {
     /// Türkçe bulunma eki ("Chrome'da"); ünlü uyumu tarayıcı adının okunuşuna göre elle verilir.
     var locative: String {
         switch self {

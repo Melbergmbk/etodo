@@ -12,6 +12,14 @@ public enum Browser: String, CaseIterable, Sendable {
         case .edge: "Edge"
         }
     }
+
+    /// Chromium tabanlılar çerezleri Anahtar Zinciri'ndeki bir anahtarla şifreler; macOS ilk okumada parola sorar.
+    public var usesKeychain: Bool {
+        switch self {
+        case .chrome, .brave, .edge: true
+        case .safari, .firefox: false
+        }
+    }
 }
 
 public enum MediaFormat: Hashable, Sendable {

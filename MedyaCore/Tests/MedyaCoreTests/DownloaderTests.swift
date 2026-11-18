@@ -118,6 +118,23 @@ final class ProgressBox: @unchecked Sendable {
         #expect(runner.calls[1].1.contains("--cookies-from-browser"))
     }
 
+    @Test func declinedCookieConsentShowsOriginalErrorWithoutRetry() async throws {
+        let dir = try tempDir()
+        let runner = FakeRunner([.init(matches: { _, _ in true }, result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: [Instagram] X: Requested content is not available, rate-limit reached or login required"))])
+        let asked = LineBox()
+        let d = Downloader(runner: runner, tools: tools, beforeCookies: { b in asked.add(b.rawValue); return false })
+        await #expect(throws: UserFacingError.instagramLoginRequired(.chrome)) {
+            _ = try await d.fetchInfo(request(.instagram, .video(maxHeight: nil), dest: dir))
+        }
+        #expect(asked.all == ["chrome"])
+        #expect(runner.calls.count == 1)
+    }
+
+    @Test func browserKeychainUse() {
+        #expect(Browser.chrome.usesKeychain && Browser.brave.usesKeychain && Browser.edge.usesKeychain)
+        #expect(!Browser.safari.usesKeychain && !Browser.firefox.usesKeychain)
+    }
+
     @Test func cookieRetryBlockedByMacOSNeedsFullDiskAccess() async throws {
         let dir = try tempDir()
         let runner = FakeRunner([

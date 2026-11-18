@@ -46,6 +46,12 @@ struct RootView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+        .sheet(isPresented: Binding(get: { model.keychainPrompt != nil },
+                                    set: { if !$0 && model.keychainPrompt != nil { model.answerKeychainPrompt(false) } })) {
+            if let browser = model.keychainPrompt {
+                KeychainExplanation(browser: browser) { model.answerKeychainPrompt($0) }
+            }
+        }
         .animation(motion, value: model.disclaimerAccepted)
         .animation(motion, value: model.toolsState)
         .animation(motion, value: model.toast)
@@ -128,5 +134,36 @@ private extension ToolbarContent {
         } else {
             self
         }
+    }
+}
+
+/// macOS'un Anahtar Zinciri parola penceresinden hemen önce, bir kez gösterilir.
+private struct KeychainExplanation: View {
+    let browser: Browser
+    let answer: (Bool) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("\(browser.displayName) girişin kullanılacak", systemImage: "key")
+                .font(.system(size: 14, weight: .semibold))
+            Text("Bu bağlantı giriş istiyor. \(AppIdentity.displayName), \(browser.locative)ki oturumunu kullanabilmek için tarayıcının kayıtlı anahtarını okuyacak.")
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Birazdan Mac’in parolanı soran bir pencere açacak. Parolanı girip **Her Zaman İzin Ver**’e basarsan bir daha sorulmaz.")
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Parolan ve çerezlerin bu Mac’ten hiçbir yere gönderilmez.")
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Vazgeç") { answer(false) }
+                    .keyboardShortcut(.cancelAction)
+                Button("Devam") { answer(true) }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(.top, 4)
+        }
+        .font(.system(size: 12.5))
+        .padding(22)
+        .frame(width: 400)
     }
 }

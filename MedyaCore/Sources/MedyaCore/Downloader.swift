@@ -11,9 +11,13 @@ public actor Downloader {
     /// Son çalıştırmanın ham hata çıktısı ("Ayrıntıları göster" için).
     public private(set) var lastErrorOutput: String = ""
 
-    public init(runner: ProcessRunning, tools: ToolPaths) {
+    /// Tarayıcı çerezlerine ilk kez dokunmadan önce kullanıcıya sorulur; false dönerse çerezsiz hata gösterilir.
+    private let beforeCookies: (@Sendable (Browser) async -> Bool)?
+
+    public init(runner: ProcessRunning, tools: ToolPaths, beforeCookies: (@Sendable (Browser) async -> Bool)? = nil) {
         self.runner = runner
         self.tools = tools
+        self.beforeCookies = beforeCookies
     }
 
     public func fetchInfo(_ r: DownloadRequest) async throws(UserFacingError) -> FetchResult {
@@ -37,6 +41,7 @@ public actor Downloader {
             return try await op(r)
         } catch {
             guard error != .cancelled, Self.loginMightHelp(lastErrorOutput) else { throw error }
+            if let ask = beforeCookies, await !ask(r.browser) { throw error }
             var withCookies = r
             withCookies.useCookies = true
             return try await op(withCookies)

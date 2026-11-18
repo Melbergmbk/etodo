@@ -47,6 +47,11 @@ struct ShownError: Equatable {
 final class AppModel {
     static let browserKey = "browser"
     static let disclaimerKey = "disclaimerAccepted"
+    static let keychainExplainedKey = "keychainExplained"
+
+    /// Doluyken Anahtar Zinciri açıklaması gösterilir; kullanıcı cevap verince devam eder.
+    var keychainPrompt: Browser?
+    @ObservationIgnored private var keychainAnswer: CheckedContinuation<Bool, Never>?
     static let audioRates = [320, 192, 128]
 
     private(set) var disclaimerAccepted: Bool
@@ -190,7 +195,8 @@ final class AppModel {
                 return
             }
         }
-        downloader = Downloader(runner: runner, tools: await manager.paths)
+        downloader = Downloader(runner: runner, tools: await manager.paths,
+                                beforeCookies: { [weak self] browser in await self?.allowCookies(browser) ?? false })
         error = nil
         toolsState = .ready
         await refreshToolInfo()
@@ -401,6 +407,25 @@ final class AppModel {
             : "İndirildi: \(files.count) dosya (\(first.deletingLastPathComponent().lastPathComponent))"
         await tools.log.append(text)
         activity = await tools.log.entries()
+    }
+
+    // MARK: Çerez izni
+
+    /// Chromium tarayıcılarda macOS'un parola penceresinden önce bir kez ne olacağını anlatır.
+    func allowCookies(_ browser: Browser) async -> Bool {
+        guard browser.usesKeychain, !defaults.bool(forKey: Self.keychainExplainedKey) else { return true }
+        return await withCheckedContinuation { cont in
+            keychainAnswer?.resume(returning: false)
+            keychainAnswer = cont
+            keychainPrompt = browser
+        }
+    }
+
+    func answerKeychainPrompt(_ proceed: Bool) {
+        if proceed { defaults.set(true, forKey: Self.keychainExplainedKey) }
+        keychainPrompt = nil
+        keychainAnswer?.resume(returning: proceed)
+        keychainAnswer = nil
     }
 
     // MARK: Kayıt yeri
