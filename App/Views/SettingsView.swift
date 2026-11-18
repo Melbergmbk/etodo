@@ -185,6 +185,21 @@ private struct AboutSettings: View {
                 .textSelection(.enabled)
                 .padding(.top, 2)
 
+            HStack(spacing: 8) {
+                Text("MBK")
+                    .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                    .tracking(0.8)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2.5)
+                    .overlay(Capsule().strokeBorder(Color.primary.opacity(0.2), lineWidth: 0.5))
+                Text("Geliştiren: Melih Buğra Karaşın")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 10)
+            .accessibilityElement(children: .combine)
+
             VStack(alignment: .leading, spacing: 10) {
                 Text(Disclaimer.title)
                     .font(.system(size: 13, weight: .semibold))

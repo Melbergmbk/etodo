@@ -31,7 +31,21 @@ struct RootView: View {
         }
         .windowChrome()
         .toolbar {
-            ToolbarItem(placement: .primaryAction) { UpdateBadge(updates: updates) }
+            ToolbarItem(placement: .primaryAction) {
+                HStack(spacing: 10) {
+                    UpdateBadge(updates: updates)
+                    SettingsLink {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Ayarlar (⌘,)")
+                    .accessibilityLabel("Ayarlar")
+                }
+            }
         }
         .overlay(alignment: .top) {
             if let toast = model.toast {

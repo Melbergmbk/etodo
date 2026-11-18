@@ -26,9 +26,9 @@ public enum UserFacingError: Error, Equatable, Sendable {
         case .destinationNotWritable:
             "Seçtiğin klasöre kayıt yapılamıyor. Klasör silinmiş ya da yazma iznin yok; başka bir klasör seç."
         case .safariNeedsFullDiskAccess:
-            "Safari'nin çerezlerini okuyabilmek için \(AppIdentity.displayName) uygulamasına Tam Disk Erişimi vermen gerekiyor. Sistem Ayarları > Gizlilik ve Güvenlik > Tam Disk Erişimi bölümünden uygulamayı aç, sonra uygulamayı kapatıp yeniden başlat."
+            "Safari'deki girişini kullanabilmek için \(AppIdentity.displayName) uygulamasına bir kez Tam Disk Erişimi vermen gerekiyor."
         case .browserCookiesUnavailable(let b):
-            "Bu bağlantı için \(b.displayName) hesabındaki girişin gerekiyor, ama macOS \(b.displayName) verilerine erişime izin vermedi. Sistem Ayarları > Gizlilik ve Güvenlik > Tam Disk Erişimi bölümünde \(AppIdentity.displayName) uygulamasını aç, sonra uygulamayı yeniden başlat."
+            "Bu bağlantı için \(b.locative)ki girişin gerekiyor, ama macOS buna izin vermedi. \(AppIdentity.displayName) uygulamasına bir kez Tam Disk Erişimi vermen yeterli."
         case .unsupportedLink:
             "Bu bağlantı desteklenmiyor. Videonun ya da gönderinin doğrudan linkini yapıştırmayı dene."
         case .cancelled:

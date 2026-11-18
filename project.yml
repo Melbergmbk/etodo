@@ -21,6 +21,7 @@ targets:
         # Menü çubuğu ve Dock'taki ad: MedyaCore/AppIdentity.displayName ile elle aynı tutulmalı.
         CFBundleName: "Etodo"
         CFBundleDisplayName: "Etodo"
+        NSHumanReadableCopyright: "© 2026 Melih Buğra Karaşın (MBK)"
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         SUFeedURL: $(UPDATE_FEED_URL)

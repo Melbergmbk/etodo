@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import MedyaCore
 
 struct ErrorBanner: View {
     let error: ShownError
@@ -19,15 +20,10 @@ struct ErrorBanner: View {
                         .font(.system(size: 12.5))
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
+                    if error.error.needsFullDiskAccess {
+                        FullDiskAccessGuide()
+                    }
                     HStack(spacing: 14) {
-                        if error.error.needsFullDiskAccess {
-                            Button("Ayarları Aç") {
-                                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
-                                    NSWorkspace.shared.open(url)
-                                }
-                            }
-                            .controlSize(.small)
-                        }
                         if !detailText.isEmpty {
                             Button(showDetails ? "Ayrıntıları gizle" : "Ayrıntıları göster") {
                                 showDetails.toggle()
@@ -87,6 +83,62 @@ struct ErrorBanner: View {
             .controlSize(.small)
         }
     }
+}
+
+/// Tam Disk Erişimi listesinde uygulama çoğu zaman kendiliğinden görünmez; "+" ile eklemeyi adım adım anlatır.
+private struct FullDiskAccessGuide: View {
+    private let appPath = Bundle.main.bundleURL.path
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            step(1) { Text("**Ayarları Aç**’a bas; Tam Disk Erişimi listesi açılır.") }
+            step(2) { Text("Listede **\(AppIdentity.displayName)** yoksa en alttaki **+** düğmesine bas ve uygulamayı seç. Uygulamanın yeri:") }
+            Text(appPath)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .padding(.leading, 22)
+            step(3) { Text("**\(AppIdentity.displayName)**’nun anahtarını aç.") }
+            step(4) { Text("\(AppIdentity.displayName)’yu kapatıp yeniden aç, linki tekrar dene.") }
+            HStack(spacing: 8) {
+                Button("Ayarları Aç") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .controlSize(.small)
+                .buttonStyle(.borderedProminent)
+                Button("Uygulamayı Finder’da Göster") {
+                    NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+                }
+                .controlSize(.small)
+            }
+            .padding(.top, 2)
+        }
+        .font(.system(size: 12))
+        .padding(.top, 2)
+    }
+
+    private func step(_ n: Int, @ViewBuilder _ text: () -> Text) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("\(n)")
+                .font(.system(size: 10, weight: .semibold))
+                .monospacedDigit()
+                .frame(width: 14, height: 14)
+                .background(Color.primary.opacity(0.08), in: Circle())
+            text().fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+#Preview("Tam Disk Erişimi") {
+    ErrorBanner(error: ShownError(error: .browserCookiesUnavailable(.chrome), details: ""), onClose: {})
+        .padding(24)
+        .frame(width: 520)
 }
 
 #Preview {
