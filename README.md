@@ -37,10 +37,10 @@ Sonra:
 
 1. Ekranın sol üstündeki  menüsünden **Sistem Ayarları**'nı aç.
 2. Soldan **Gizlilik ve Güvenlik**'e tıkla.
-3. Sayfayı aşağı kaydır. *"Etodo, Mac'inizi korumak için engellendi"* yazısının yanındaki **Yine de Aç** düğmesine bas.
-4. Mac parolanı (ya da Touch ID'ni) iste. Gir, ardından **Yine de Aç**'a bir kez daha bas.
+3. Sayfayı aşağı kaydır. Etodo'nun engellendiğini söyleyen satırın yanındaki **Yine de Aç** düğmesine bas.
+4. *"Etodo açılsın mı?"* penceresi çıkar. Buradaki **Yine de Aç**'a bas. Mac parolanı ya da Touch ID'ni sorarsa gir.
 
-<p align="center"><img src="docs/kurulum/3-yine-de-ac.png" width="520" alt="Gizlilik ve Güvenlik sayfasındaki Yine de Aç düğmesi"></p>
+<p align="center"><img src="docs/kurulum/3-yine-de-ac.png" width="520" alt="Gizlilik ve Güvenlik sayfasındaki Yine de Aç düğmesi ve onay penceresi"></p>
 
 Hepsi bu. Bundan sonra Etodo her zaman normal bir uygulama gibi açılır.
 
@@ -54,7 +54,7 @@ Hepsi bu. Bundan sonra Etodo her zaman normal bir uygulama gibi açılır.
 
 1. Üstten siteyi seç: **YouTube**, **Instagram** ya da **Diğer** (X, TikTok ve yüzlerce site).
 2. Linki yapıştır (**⌘V**). Etodo videonun ön izlemesini gösterir.
-3. **MP4** (video) ya da **MP3** (ses) seç, kaliteyi belirle, **İndir**'e bas.
+3. **MP4** (video) ya da **MP3** (ses) seç, kaliteyi belirle — her seçeneğin yanında dosyanın yaklaşık boyutu yazar — ve **İndir**'e bas.
 
 Dosyalar kendiliğinden düzenli klasörlere iner:
 

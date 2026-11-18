@@ -1,4 +1,5 @@
 import SwiftUI
+import MedyaCore
 
 struct FormatPicker: View {
     @Bindable var model: AppModel
@@ -22,7 +23,7 @@ struct FormatPicker: View {
     private var quality: some View {
         if model.formatKind == .audio {
             Picker("Kalite", selection: $model.audioKbps) {
-                ForEach(AppModel.audioRates, id: \.self) { Text("\($0) kbps").tag($0) }
+                ForEach(AppModel.audioRates, id: \.self) { Text(Self.withSize("\($0) kbps", info?.estimatedAudioBytes(kbps: $0))).tag($0) }
             }
             .pickerStyle(.menu)
             .labelsHidden()
@@ -33,12 +34,25 @@ struct FormatPicker: View {
                 .foregroundStyle(.secondary)
         } else {
             Picker("Kalite", selection: $model.videoHeight) {
-                ForEach(model.qualityOptions, id: \.self) { Text(Self.label(for: $0)).tag(Optional($0)) }
+                ForEach(model.qualityOptions, id: \.self) {
+                    Text(Self.withSize(Self.label(for: $0), info?.estimatedVideoBytes(maxHeight: $0))).tag(Optional($0))
+                }
             }
             .pickerStyle(.menu)
             .labelsHidden()
             .fixedSize()
         }
+    }
+
+    private var info: MediaInfo? {
+        if case .media(let info) = model.preview { return info }
+        return nil
+    }
+
+    /// "1080p · ≈ 245 MB"; boyut bilinmiyorsa yalnız etiket.
+    static func withSize(_ label: String, _ bytes: Int64?) -> String {
+        guard let bytes, bytes > 0 else { return label }
+        return "\(label)  ·  ≈ \(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))"
     }
 
     static func label(for height: Int) -> String {

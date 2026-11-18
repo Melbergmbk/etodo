@@ -50,4 +50,51 @@ import Foundation
     @Test func invalidJSONThrows() {
         #expect(throws: (any Error).self) { try MediaInfo.parse(Data("not json".utf8)) }
     }
+
+    @Test func estimatesVideoSizePreferringH264AndM4A() throws {
+        let json = #"""
+        {"id":"a","duration":100,"formats":[
+          {"height":1080,"vcodec":"avc1.640028","acodec":"none","filesize":50000000},
+          {"height":1080,"vcodec":"vp09.00.40.08","acodec":"none","filesize":40000000},
+          {"height":720,"vcodec":"avc1.4d401f","acodec":"none","filesize_approx":20000000},
+          {"height":2160,"vcodec":"vp09.00.51.08","acodec":"none","tbr":16000},
+          {"vcodec":"none","acodec":"mp4a.40.2","filesize":3000000},
+          {"vcodec":"none","acodec":"opus","filesize":2500000}
+        ]}
+        """#
+        let info = try MediaInfo.parse(Data(json.utf8))
+        #expect(info.estimatedVideoBytes(maxHeight: 1080) == 53_000_000)
+        #expect(info.estimatedVideoBytes(maxHeight: 900) == 23_000_000)
+        // boyut yoksa tbr (kbit/sn) × süre
+        #expect(info.estimatedVideoBytes(maxHeight: 2160) == 203_000_000)
+        #expect(info.estimatedVideoBytes(maxHeight: nil) == 203_000_000)
+        #expect(info.estimatedVideoBytes(maxHeight: 360) == nil)
+    }
+
+    @Test func estimatesAudioSizeFromBitrateAndDuration() throws {
+        let info = MediaInfo(title: "", uploader: nil, duration: 60, thumbnailURL: nil, availableHeights: [])
+        #expect(info.estimatedAudioBytes(kbps: 192) == 1_440_000)
+        let noDuration = MediaInfo(title: "", uploader: nil, duration: nil, thumbnailURL: nil, availableHeights: [])
+        #expect(noDuration.estimatedAudioBytes(kbps: 192) == nil)
+    }
+
+    @Test func combinedFormatsCountOnce() throws {
+        let json = #"""
+        {"id":"a","duration":10,"formats":[{"height":640,"vcodec":"avc1","acodec":"mp4a","filesize":1000000}]}
+        """#
+        let info = try MediaInfo.parse(Data(json.utf8))
+        #expect(info.estimatedVideoBytes(maxHeight: 640) == 1_000_000)
+    }
+
+    @Test func ignoresHLSCopiesWhenDirectDownloadExists() throws {
+        let json = #"""
+        {"id":"a","duration":100,"formats":[
+          {"height":1080,"vcodec":"avc1.64002A","acodec":"none","protocol":"m3u8_native","tbr":7400},
+          {"height":1080,"vcodec":"avc1.64002A","acodec":"none","protocol":"https","filesize":257000000},
+          {"vcodec":"none","acodec":"mp4a.40.2","protocol":"https","filesize":30000000}
+        ]}
+        """#
+        let info = try MediaInfo.parse(Data(json.utf8))
+        #expect(info.estimatedVideoBytes(maxHeight: 1080) == 287_000_000)
+    }
 }

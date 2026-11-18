@@ -34,18 +34,10 @@ struct RootView: View {
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: 10) {
                     UpdateBadge(updates: updates)
-                    SettingsLink {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 13, weight: .regular))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 22, height: 22)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .help("Ayarlar (⌘,)")
-                    .accessibilityLabel("Ayarlar")
+                    SettingsButton()
                 }
             }
+            .withoutGlassBubble()
         }
         .overlay(alignment: .top) {
             if let toast = model.toast {
@@ -103,6 +95,38 @@ private struct GlassBackground: ViewModifier {
                 .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         } else {
             content.background(WindowGlass().ignoresSafeArea())
+        }
+    }
+}
+
+/// Başlık çubuğunda sade dişli; üstüne gelince hafif zemin belirir.
+private struct SettingsButton: View {
+    @State private var hovering = false
+
+    var body: some View {
+        SettingsLink {
+            Image(systemName: "gearshape")
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(hovering ? .primary : .secondary)
+                .frame(width: 24, height: 24)
+                .background(Color.primary.opacity(hovering ? 0.08 : 0), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Ayarlar (⌘,)")
+        .accessibilityLabel("Ayarlar")
+    }
+}
+
+private extension ToolbarContent {
+    /// macOS 26'nın araç çubuğu öğelerine eklediği cam kabarcığı kaldırır.
+    @ToolbarContentBuilder
+    func withoutGlassBubble() -> some ToolbarContent {
+        if #available(macOS 26, *) {
+            self.sharedBackgroundVisibility(.hidden)
+        } else {
+            self
         }
     }
 }
