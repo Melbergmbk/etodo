@@ -4,6 +4,7 @@ import MedyaCore
 /// Ana pencere akışı: hukuki uyarı → (araç eksikse) kurulum → ana görünüm.
 struct RootView: View {
     let model: AppModel
+    let updates: UpdateController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var motion: Animation? { reduceMotion ? nil : .smooth(duration: 0.25) }
@@ -29,6 +30,9 @@ struct RootView: View {
             }
         }
         .windowChrome()
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) { UpdateBadge(updates: updates) }
+        }
         .overlay(alignment: .top) {
             if let toast = model.toast {
                 Toast(text: toast)

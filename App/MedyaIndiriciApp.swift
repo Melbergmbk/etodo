@@ -7,10 +7,11 @@ import Sparkle
 struct MedyaIndiriciApp: App {
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
     @State private var model = AppModel()
+    @State private var updates = UpdateController()
 
     var body: some Scene {
         Window(AppIdentity.displayName, id: "main") {
-            RootView(model: model)
+            RootView(model: model, updates: updates)
         }
         .windowResizability(.contentSize)
 
