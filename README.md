@@ -108,7 +108,20 @@ Hata kutusundaki **Ayrıntıları göster › Kopyala** ile metni kopyalayıp ba
 
 Etodo yalnızca kişisel ve ticari olmayan kullanım içindir. İndirdiğin içeriklerin hakları, onları üretenlere aittir. İçerikleri yalnızca hak sahibinin izin verdiği ya da kanunun kişisel kullanıma imkân tanıdığı ölçüde kullan; başkalarıyla paylaşmak, yeniden yayımlamak veya ticari amaçla kullanmak senin sorumluluğundadır. İndirme yaptığın platformların kullanım koşullarına uymak da sana aittir.
 
-Etodo, açık kaynaklı [yt-dlp](https://github.com/yt-dlp/yt-dlp), [gallery-dl](https://github.com/mikf/gallery-dl), [FFmpeg](https://ffmpeg.org) ve [Deno](https://deno.com) araçlarını kullanır; bunları güvenilir kaynaklardan indirir ve sağlama toplamı ya da çalışma testiyle doğrular.
+## Lisans ve kullanılan araçlar
+
+Etodo'nun kendi kodu [MIT lisansıyla](LICENSE) açıktır: adı korunduğu sürece herkes kullanabilir, değiştirebilir ve paylaşabilir; yazılım "olduğu gibi" sunulur.
+
+Etodo aşağıdaki ücretsiz, açık kaynaklı yazılımları kullanır; her biri kendi lisansına tabidir. Sparkle uygulamanın içinde gelir ([lisans metni](App/Resources/Sparkle-LICENSE.txt)). Diğerleri kurulum dosyasında yer almaz; ilk açılışta kendi kaynaklarından senin Mac'ine indirilir ve sağlama toplamı ya da çalışma testiyle doğrulanır.
+
+| Yazılım | Ne için | Lisans |
+|---|---|---|
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | Video ve ses indirme | Unlicense |
+| [gallery-dl](https://github.com/mikf/gallery-dl) | Fotoğraf ve galeri indirme | GPL-2.0 |
+| [FFmpeg](https://ffmpeg.org) | Görüntü ve sesi birleştirme, dönüştürme | GPL |
+| [Deno](https://deno.com) | YouTube bağlantılarını çözme | MIT |
+| [Python](https://www.python.org) | gallery-dl'nin çalışma ortamı | PSF |
+| [Sparkle](https://sparkle-project.org) | Uygulama güncellemeleri (uygulamanın içinde) | MIT |
 
 ---
 

@@ -209,7 +209,49 @@ private struct AboutSettings: View {
             .padding(16)
             .surface(radius: 10)
             .padding(.top, 18)
+
+            OpenSourceCredits()
+                .padding(.top, 12)
         }
         .padding(24)
+    }
+}
+
+private struct OpenSourceCredits: View {
+    private static let items: [(name: String, license: String, url: String)] = [
+        ("yt-dlp", "Unlicense", "https://github.com/yt-dlp/yt-dlp"),
+        ("gallery-dl", "GPL-2.0", "https://github.com/mikf/gallery-dl"),
+        ("FFmpeg", "GPL", "https://ffmpeg.org"),
+        ("Deno", "MIT", "https://deno.com"),
+        ("Python", "PSF", "https://www.python.org"),
+        ("Sparkle", "MIT", "https://sparkle-project.org"),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Kullanılan açık kaynak yazılımlar")
+                .font(.system(size: 13, weight: .semibold))
+            Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 4) {
+                ForEach(0..<3) { row in
+                    GridRow {
+                        ForEach(0..<2) { col in
+                            let item = Self.items[row * 2 + col]
+                            HStack(spacing: 6) {
+                                Link(item.name, destination: URL(string: item.url)!)
+                                Text(item.license).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+            .font(.system(size: 12))
+            Text("Sparkle dışındakiler kurulum dosyasında yer almaz; ilk açılışta kendi kaynaklarından indirilir. Etodo'nun kendi kodu MIT lisansıyla açıktır.")
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .surface(radius: 10)
     }
 }
