@@ -97,7 +97,7 @@ YouTube 4K videoları Apple'ın QuickTime'ının açamadığı bir biçimde yay�
 Hesap gizli olabilir ya da gönderi silinmiş olabilir. Gizli hesaplarda, tarayıcında o hesabı görebilen kullanıcıyla giriş yapmış olman gerekir.
 
 **Uygulamayı nasıl kaldırırım?**
-Uygulamalar klasöründeki Etodo'yu Çöp Sepeti'ne at. Araçları da silmek istersen Finder'da **Git › Klasöre Git** ile `~/Library/Application Support/Etodo` klasörünü açıp sil. İndirdiğin dosyalara dokunulmaz.
+Uygulamalar klasöründeki Etodo'yu Çöp Sepeti'ne at. Araçları da silmek istersen Finder'da **Git › Klasöre Git** ile `~/Library/Application Support/Etodo` klasörünü açıp sil. İstersen `~/Library/Caches/pip` ve `~/Library/Caches/yt-dlp` klasörlerini de silebilirsin. İndirdiğin dosyalara dokunulmaz.
 
 **Bir hata aldım.**
 Hata kutusundaki **Ayrıntıları göster › Kopyala** ile metni kopyalayıp bana ilet.
@@ -108,7 +108,7 @@ Hata kutusundaki **Ayrıntıları göster › Kopyala** ile metni kopyalayıp ba
 
 Etodo yalnızca kişisel ve ticari olmayan kullanım içindir. İndirdiğin içeriklerin hakları, onları üretenlere aittir. İçerikleri yalnızca hak sahibinin izin verdiği ya da kanunun kişisel kullanıma imkân tanıdığı ölçüde kullan; başkalarıyla paylaşmak, yeniden yayımlamak veya ticari amaçla kullanmak senin sorumluluğundadır. İndirme yaptığın platformların kullanım koşullarına uymak da sana aittir.
 
-Etodo, açık kaynaklı [yt-dlp](https://github.com/yt-dlp/yt-dlp), [gallery-dl](https://github.com/mikf/gallery-dl), [FFmpeg](https://ffmpeg.org) ve [Deno](https://deno.com) araçlarını kullanır; bunları resmî kaynaklarından indirip doğrular.
+Etodo, açık kaynaklı [yt-dlp](https://github.com/yt-dlp/yt-dlp), [gallery-dl](https://github.com/mikf/gallery-dl), [FFmpeg](https://ffmpeg.org) ve [Deno](https://deno.com) araçlarını kullanır; bunları güvenilir kaynaklardan indirir ve sağlama toplamı ya da çalışma testiyle doğrular.
 
 ---
 

@@ -11,7 +11,17 @@ xcodebuild -scheme Etodo -configuration Release -derivedDataPath build/rel \
 
 app=build/rel/Build/Products/Release/Etodo.app
 version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app/Contents/Info.plist")
-codesign --force --deep -s - "$app"
+# Hep aynı sertifikayla imzalanırsa macOS güncellemeden sonra da "aynı uygulama" der; izinler korunur.
+# Sertifika: scripts/make-signing-cert.sh (bir kez). Yoksa geçici (ad-hoc) imza.
+identity="Etodo - Melih Bugra Karasin"
+if security find-certificate -c "$identity" >/dev/null 2>&1; then
+  codesign --force --deep -s "$identity" "$app"
+elif [[ -n "${ETODO_REQUIRE_CERT:-}" ]]; then
+  echo "İmza sertifikası yok: önce scripts/make-signing-cert.sh çalıştır." >&2; exit 1
+else
+  echo "Uyarı: sertifika yok, geçici imza kullanılıyor." >&2
+  codesign --force --deep -s - "$app"
+fi
 codesign --verify --deep --strict "$app"
 
 stage=$(mktemp -d)

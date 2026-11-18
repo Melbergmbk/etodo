@@ -63,6 +63,19 @@ final class FakeFetcher: HTTPFetching, @unchecked Sendable {
         ToolManager(root: root, fetcher: f, runner: r, arch: "arm64")
     }
 
+    @Test func removeLeftoversDeletesOnlyInterruptedInstallFolders() async throws {
+        let root = try tempRoot(), fm = FileManager.default
+        let tools = root.appendingPathComponent("tools")
+        let keep = tools.appendingPathComponent("ytdlp/2026.10.26")
+        for dir in [tools.appendingPathComponent(".staging-abc/out"), tools.appendingPathComponent("ytdlp/.current-xyz"), keep] {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        await manager(root, FakeFetcher(), FakeRunner([])).removeLeftovers()
+        #expect(!fm.fileExists(atPath: tools.appendingPathComponent(".staging-abc").path))
+        #expect(!fm.fileExists(atPath: tools.appendingPathComponent("ytdlp/.current-xyz").path))
+        #expect(fm.fileExists(atPath: keep.path))
+    }
+
     func versionDirs(_ root: URL) -> [String] {
         let dir = root.appendingPathComponent("tools/ytdlp")
         return ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []).filter { $0 != "current" }.sorted()

@@ -28,14 +28,14 @@ struct FormatPicker: View {
             .pickerStyle(.menu)
             .labelsHidden()
             .fixedSize()
-        } else if model.qualityOptions.isEmpty {
-            Text("En iyi kalite")
+        } else if model.qualityOptions.isEmpty || model.qualityIsOriginal {
+            Text(model.qualityIsOriginal ? "Orijinal kalite" : "En iyi kalite")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
         } else {
             Picker("Kalite", selection: $model.videoHeight) {
                 ForEach(model.qualityOptions, id: \.self) {
-                    Text(Self.withSize(Self.label(for: $0), info?.estimatedVideoBytes(maxHeight: $0))).tag(Optional($0))
+                    Text(Self.withSize(Self.label(for: info?.qualityName(forHeight: $0) ?? $0), info?.estimatedVideoBytes(maxHeight: $0))).tag(Optional($0))
                 }
             }
             .pickerStyle(.menu)

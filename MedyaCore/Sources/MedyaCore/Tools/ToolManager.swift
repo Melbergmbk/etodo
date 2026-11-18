@@ -135,6 +135,18 @@ public actor ToolManager {
 
     // MARK: Kurulum ve güncelleme
 
+    /// Yarıda kalmış kurulumların geçici klasörleri (~90 MB olabilir). Yalnız açılışta, başka iş yokken çağrılır.
+    public func removeLeftovers() {
+        let fm = FileManager.default
+        let dirs = [tools] + ToolKind.allCases.map { tools.appendingPathComponent($0.rawValue) }
+        for dir in dirs {
+            for name in (try? fm.contentsOfDirectory(atPath: dir.path)) ?? []
+            where name.hasPrefix(".staging-") || name.hasPrefix(".current-") {
+                try? fm.removeItem(at: dir.appendingPathComponent(name))
+            }
+        }
+    }
+
     public func installMissing(progress: @escaping @Sendable (ToolKind, Double) -> Void) async throws(UserFacingError) {
         await acquireWork()
         defer { releaseWork() }
@@ -299,8 +311,9 @@ public actor ToolManager {
     }
 
     /// Başarısızlık ağdan kaynaklanıyorsa `.noInternet` fırlatır.
+    /// Zaman sınırı: kötü bağlantıda pip'in varsayılanı (15 sn × 6 deneme) yeni indirmeleri bekletiyordu.
     private func pip(_ args: [String], python: URL? = nil) async throws -> Bool {
-        let r = try await installer.runner.run(python ?? pythonExe, ["-I", "-m", "pip", "install", "--no-user"] + args,
+        let r = try await installer.runner.run(python ?? pythonExe, ["-I", "-m", "pip", "install", "--no-user", "--timeout", "10", "--retries", "1"] + args,
                                                environment: Self.pythonEnv, onLine: { _ in })
         if r.exitCode != 0, Self.pipLooksOffline(r.stderr) { throw UserFacingError.noInternet }
         return r.exitCode == 0

@@ -88,6 +88,7 @@ final class AppModel {
     @ObservationIgnored private var downloader: Downloader?
     @ObservationIgnored private var fetchTask: Task<Void, Never>?
     @ObservationIgnored private var downloadTask: Task<Void, Never>?
+    @ObservationIgnored private var periodicUpdates: Task<Void, Never>?
     @ObservationIgnored private var toastTask: Task<Void, Never>?
     @ObservationIgnored private let defaults: UserDefaults
 
@@ -145,6 +146,13 @@ final class AppModel {
         }
     }
 
+    /// Instagram gönderileri (/p/) gallery-dl ile orijinal kalitede iner; kalite seçimi işlemez.
+    var qualityIsOriginal: Bool {
+        guard site == .instagram, formatKind == .video,
+              let url = URL(string: link.trimmingCharacters(in: .whitespacesAndNewlines)) else { return false }
+        return url.pathComponents.dropFirst().first?.lowercased() == "p"
+    }
+
     var qualityOptions: [Int] {
         if case .media(let info) = preview { return info.availableHeights }
         return []
@@ -169,6 +177,7 @@ final class AppModel {
     func prepareTools() async {
         guard disclaimerAccepted, toolsState == .checking || toolsState == .failed else { return }
         let manager = manager()
+        await manager.removeLeftovers()
 
         let missing = await manager.status().filter { !$0.isReady }.map(\.kind)
         if !missing.isEmpty {
@@ -202,6 +211,15 @@ final class AppModel {
         await refreshToolInfo()
         if missing.isEmpty {
             Task { await self.updateTools(announce: true) }
+        }
+        // Uygulama günlerce açık kalırsa araçlar yine 2 günde bir güncellenir.
+        periodicUpdates?.cancel()
+        periodicUpdates = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(UpdateSchedule.interval))
+                guard !Task.isCancelled else { return }
+                await self?.updateTools(announce: true)
+            }
         }
     }
 

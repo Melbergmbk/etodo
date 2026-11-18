@@ -10,6 +10,7 @@ public struct MediaInfo: Sendable, Equatable {
 
     struct Stream: Sendable, Equatable {
         var height: Int?
+        var width: Int? = nil
         var vcodec: String?
         var acodec: String?
         var bytes: Int64?
@@ -43,6 +44,13 @@ public struct MediaInfo: Sendable, Equatable {
         return videoBytes + (audio?.bytes ?? 0)
     }
 
+    /// Kalite adı kısa kenara göre: dikey 1080×1920 bir Short "1920p" değil "1080p" görünür.
+    public func qualityName(forHeight h: Int) -> Int {
+        let widths = streams.filter { $0.height == h }.compactMap(\.width)
+        guard let w = widths.max(), w > 0 else { return h }
+        return min(w, h)
+    }
+
     /// MP3 sabit bit hızıyla kodlanır: kbit/sn × süre.
     public func estimatedAudioBytes(kbps: Int) -> Int64? {
         duration.map { Int64(Double(kbps) * 125 * $0) }
@@ -59,6 +67,7 @@ public struct MediaInfo: Sendable, Equatable {
     private struct Raw: Decodable {
         struct Format: Decodable {
             var height: Int?
+            var width: Int?
             var vcodec: String?
             var acodec: String?
             var filesize: Double?
@@ -88,7 +97,7 @@ public struct MediaInfo: Sendable, Equatable {
             if f.ext == "mhtml" || f.format_note?.lowercased().contains("storyboard") == true { return nil }
             // Boyut bilinmiyorsa ortalama bit hızı (kbit/sn) × süre
             let bytes = f.filesize ?? f.filesize_approx ?? zip(f.tbr, raw.duration).map { $0 * 125 * $1 }
-            return Stream(height: f.height, vcodec: f.vcodec, acodec: f.acodec, bytes: bytes.map { Int64($0) },
+            return Stream(height: f.height, width: f.width, vcodec: f.vcodec, acodec: f.acodec, bytes: bytes.map { Int64($0) },
                           isHLS: f.protocol?.contains("m3u8") == true)
         }
         return MediaInfo(

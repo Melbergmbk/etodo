@@ -97,4 +97,15 @@ import Foundation
         let info = try MediaInfo.parse(Data(json.utf8))
         #expect(info.estimatedVideoBytes(maxHeight: 1080) == 287_000_000)
     }
+
+    @Test func verticalVideoIsNamedByShortSide() throws {
+        let json = #"""
+        {"id":"a","formats":[{"height":1920,"width":1080,"vcodec":"avc1"},{"height":1280,"width":720,"vcodec":"avc1"},{"height":1080,"width":1920,"vcodec":"avc1"}]}
+        """#
+        let info = try MediaInfo.parse(Data(json.utf8))
+        #expect(info.qualityName(forHeight: 1920) == 1080)
+        #expect(info.qualityName(forHeight: 1280) == 720)
+        #expect(info.qualityName(forHeight: 1080) == 1080)
+        #expect(info.qualityName(forHeight: 999) == 999)
+    }
 }
