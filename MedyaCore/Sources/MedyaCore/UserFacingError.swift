@@ -9,6 +9,7 @@ public enum UserFacingError: Error, Equatable, Sendable {
     case safariNeedsFullDiskAccess
     case browserCookiesUnavailable(Browser)
     case ageRestricted(Browser)
+    case youtubeBotCheck(Browser)
     case serverBusy
     case unsupportedLink
     case cancelled
@@ -33,6 +34,8 @@ public enum UserFacingError: Error, Equatable, Sendable {
             "Bu bağlantı için tarayıcındaki giriş gerekiyor, ama \(b.displayName) bu Mac'te bulunamadı. Ayarlar'dan giriş yaptığın tarayıcıyı seç. Arc ya da Opera kullanıyorsan Chrome, Safari veya Firefox'ta siteye bir kez giriş yapman gerekir."
         case .ageRestricted(let b):
             "Bu video yaş sınırlı. İndirmek için \(b.locative) YouTube'a Google hesabınla giriş yapmış olmalısın."
+        case .youtubeBotCheck(let b):
+            "YouTube bot olmadığını doğrulamanı istiyor. VPN açıksa kapatıp tekrar dene; olmazsa \(b.locative) YouTube'a giriş yap, \(AppIdentity.displayName) o girişi kullanır."
         case .serverBusy:
             "Araçların indirildiği sunucu şu an yanıt vermiyor. Birkaç dakika sonra tekrar dene."
         case .unsupportedLink:
@@ -73,7 +76,9 @@ public enum UserFacingError: Error, Equatable, Sendable {
             return .instagramLoginRequired(browser)
         }
         if has("confirm your age", "age-restricted", "age restricted") { return .ageRestricted(browser) }
-        if has("http error 403", "sign in to confirm", "nsig extraction failed") { return .needsToolUpdate }
+        // Araç güncellemesi bot kontrolünü çözmez; IP (VPN) ya da giriş çözer.
+        if has("not a bot", "sign in to confirm") { return .youtubeBotCheck(browser) }
+        if has("http error 403", "nsig extraction failed") { return .needsToolUpdate }
         if has("private video", "http error 404", "video unavailable") { return .privateOrDeleted }
         return .unknown(details: stderr.trimmingCharacters(in: .whitespacesAndNewlines))
     }

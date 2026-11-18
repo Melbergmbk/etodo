@@ -28,7 +28,7 @@ struct ToolsSettings: View {
             footer.padding(.top, 14)
 
             if let error = model.toolsError {
-                ErrorBanner(error: error) { model.toolsError = nil }
+                ErrorBanner(error: error, diagnostics: model.diagnostics) { model.toolsError = nil }
                     .padding(.top, 12)
                     .transition(.opacity)
             }

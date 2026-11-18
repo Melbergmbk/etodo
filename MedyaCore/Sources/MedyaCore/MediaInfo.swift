@@ -114,3 +114,11 @@ private func zip(_ a: Double?, _ b: Double?) -> (Double, Double)? {
     guard let a, let b else { return nil }
     return (a, b)
 }
+
+public extension MediaInfo {
+    /// Kullanıcının son seçtiği kaliteye en yakın seçenek: onu aşmayan en yüksek, yoksa en düşük; tercih yoksa en iyisi.
+    func height(closestTo preferred: Int?) -> Int? {
+        guard let preferred else { return availableHeights.max() }
+        return availableHeights.filter { $0 <= preferred }.max() ?? availableHeights.min()
+    }
+}

@@ -4,6 +4,7 @@ import MedyaCore
 
 struct ErrorBanner: View {
     let error: ShownError
+    var diagnostics = ""
     let onClose: (() -> Void)?
 
     @State private var showDetails = false
@@ -63,10 +64,15 @@ struct ErrorBanner: View {
         return raw.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Kopyalanan metin ekranda gösterilenle aynıdır; kullanıcı ne gönderdiğini görür.
+    private var reportText: String {
+        diagnostics.isEmpty ? detailText : diagnostics + "\n\n" + detailText
+    }
+
     private var details: some View {
         VStack(alignment: .trailing, spacing: 6) {
             ScrollView {
-                Text(detailText)
+                Text(reportText)
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
@@ -75,12 +81,18 @@ struct ErrorBanner: View {
             }
             .frame(maxHeight: 110)
             .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            Button(copied ? "Kopyalandı" : "Kopyala") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(detailText, forType: .string)
-                copied = true
+            HStack {
+                Text("Bu metni kopyalayıp geliştiriciye iletebilirsin.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(copied ? "Kopyalandı" : "Sorun Bildirimini Kopyala") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(reportText, forType: .string)
+                    copied = true
+                }
+                .controlSize(.small)
             }
-            .controlSize(.small)
         }
     }
 }

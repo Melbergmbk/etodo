@@ -50,6 +50,11 @@ public actor Downloader {
 
     static func loginMightHelp(_ stderr: String) -> Bool {
         let t = stderr.lowercased()
+        // Silinmiş videoda giriş işe yaramaz; boşuna Anahtar Zinciri şifresi sorulmasın.
+        // (Gizli video bilerek dışarıda: YouTube "erişim izni verildiyse giriş yap" der.)
+        if ["video unavailable", "http error 404", "has been removed", "no longer available"].contains(where: t.contains) {
+            return false
+        }
         return ["login", "log in", "sign in", "authenticat", "cookies", "private", "rate-limit",
                 "requested content is not available", "confirm your age", "age-restricted", "age restricted",
                 "members-only", "members only"].contains { t.contains($0) }
@@ -73,12 +78,19 @@ public actor Downloader {
         if FolderLayout.usesGalleryDL(r) { return try await runGalleryDL(r, prior: []) }
 
         let paths = LockedList()
-        let result = try await execute(tools.ytdlp, CommandBuilder.ytdlpArguments(r, tools: tools)) { line in
-            if let p = ProgressParser.parse(line: line) {
-                progress(p)
-            } else if line.hasPrefix("/"), FileManager.default.fileExists(atPath: line) {
-                paths.add(line)
+        let started = Date()
+        let result: ProcessResult
+        do {
+            result = try await execute(tools.ytdlp, CommandBuilder.ytdlpArguments(r, tools: tools)) { line in
+                if let p = ProgressParser.parse(line: line) {
+                    progress(p)
+                } else if line.hasPrefix("/"), FileManager.default.fileExists(atPath: line) {
+                    paths.add(line)
+                }
             }
+        } catch .cancelled {
+            Self.removePartials(under: FolderLayout.root(in: r.destination), since: started)
+            throw .cancelled
         }
         if result.exitCode == 0 {
             let files = paths.all.map { URL(fileURLWithPath: $0) }
@@ -128,6 +140,24 @@ public actor Downloader {
     private func fail(_ stderr: String, _ r: DownloadRequest) -> UserFacingError {
         lastErrorOutput = stderr
         return .classify(stderr: stderr, browser: r.browser)
+    }
+
+    /// İptalden sonra yarım kalan dosyaları siler. yt-dlp (`--print` yüzünden) yazdığı dosyayı söylemediği için
+    /// Etodo klasöründe, indirme başladıktan sonra değişmiş ve yarım dosya kalıbına uyanlar aranır.
+    static func removePartials(under root: URL, since start: Date) {
+        let fm = FileManager.default
+        guard let files = fm.enumerator(at: root, includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey]) else { return }
+        for case let file as URL in files where isPartial(file.lastPathComponent) {
+            let values = try? file.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey])
+            guard values?.isRegularFile == true, let modified = values?.contentModificationDate,
+                  modified >= start.addingTimeInterval(-2) else { continue }
+            try? fm.removeItem(at: file)
+        }
+    }
+
+    /// `.part`, `.part-Frag3`, `.ytdl` ya da birleştirilmeyi bekleyen tek akış (`… [id].f137.mp4`).
+    static func isPartial(_ name: String) -> Bool {
+        name.range(of: #"(\.part(-Frag\d+)?|\.ytdl|\.f\d+(-\d+)?\.\w+(\.part)?)$"#, options: .regularExpression) != nil
     }
 
     /// Görsel gönderisi olabilen siteler: Instagram ve X.

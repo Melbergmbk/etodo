@@ -118,6 +118,43 @@ final class ProgressBox: @unchecked Sendable {
         #expect(runner.calls[1].1.contains("--cookies-from-browser"))
     }
 
+    @Test func removedVideoNeverAsksForCookies() {
+        #expect(!Downloader.loginMightHelp("ERROR: [youtube] abc: Video unavailable. This video is no longer available because the uploader has closed their account. Sign in"))
+        #expect(!Downloader.loginMightHelp("ERROR: Unable to download JSON metadata: HTTP Error 404: Not Found (login)"))
+        #expect(Downloader.loginMightHelp("ERROR: [youtube] abc: Private video. Sign in if you've been granted access to this video"))
+    }
+
+    @Test func recognisesPartialFileNames() {
+        #expect(Downloader.isPartial("a [x].f315.webm.part"))
+        #expect(Downloader.isPartial("a [x].f137.mp4"))
+        #expect(Downloader.isPartial("a [x].mp4.part-Frag3"))
+        #expect(Downloader.isPartial("a [x].mp4.ytdl"))
+        #expect(!Downloader.isPartial("a [x].mp4"))
+        #expect(!Downloader.isPartial("parti.mp3"))
+    }
+
+    @Test func cancelCleanupRemovesOnlyNewPartialsInsideEtodo() throws {
+        let fm = FileManager.default
+        let base = try tempDir()
+        let root = base.appendingPathComponent("Etodo")
+        let folder = root.appendingPathComponent("YouTube/Kanal/Video")
+        try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        let old = folder.appendingPathComponent("eski [z].f251.webm.part")
+        fm.createFile(atPath: old.path, contents: Data())
+        try fm.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -3600)], ofItemAtPath: old.path)
+        let start = Date()
+        for name in ["a [x].f137.mp4.part", "a [x].f251.webm", "a [x].mp4.ytdl", "bitmis [y].mp4"] {
+            fm.createFile(atPath: folder.appendingPathComponent(name).path, contents: Data())
+        }
+        let outside = base.appendingPathComponent("baska.mp4.part")
+        fm.createFile(atPath: outside.path, contents: Data())
+
+        Downloader.removePartials(under: root, since: start)
+
+        #expect(Set(try fm.contentsOfDirectory(atPath: folder.path)) == ["bitmis [y].mp4", "eski [z].f251.webm.part"])
+        #expect(fm.fileExists(atPath: outside.path))
+    }
+
     @Test func declinedCookieConsentShowsOriginalErrorWithoutRetry() async throws {
         let dir = try tempDir()
         let runner = FakeRunner([.init(matches: { _, _ in true }, result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: [Instagram] X: Requested content is not available, rate-limit reached or login required"))])

@@ -33,7 +33,7 @@ struct SetupView: View {
 
             if model.toolsState == .failed {
                 if let error = model.error {
-                    ErrorBanner(error: error, onClose: nil)
+                    ErrorBanner(error: error, diagnostics: model.diagnostics, onClose: nil)
                         .padding(.top, 16)
                         .transition(.opacity)
                 }

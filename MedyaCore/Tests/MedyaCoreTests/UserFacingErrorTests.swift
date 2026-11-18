@@ -28,8 +28,14 @@ import Testing
 
     @Test func needsToolUpdate() {
         #expect(classify("ERROR: unable to download video data: HTTP Error 403: Forbidden") == .needsToolUpdate)
-        #expect(classify("ERROR: [youtube] abc: Sign in to confirm you're not a bot") == .needsToolUpdate)
+        #expect(classify("ERROR: [youtube] abc: Sign in to confirm you're not a bot") == .youtubeBotCheck(.chrome))
         #expect(classify("WARNING: [youtube] nsig extraction failed: Some formats may be missing") == .needsToolUpdate)
+    }
+
+    @Test func botCheckIsNotAToolProblem() {
+        #expect(classify("ERROR: [youtube] abc: Sign in to confirm you're not a bot", .brave) == .youtubeBotCheck(.brave))
+        #expect(classify("ERROR: [youtube] abc: Sign in to confirm you’re not a bot") == .youtubeBotCheck(.chrome))
+        #expect(UserFacingError.youtubeBotCheck(.chrome).message.contains("VPN"))
     }
 
     @Test func noInternet() {
@@ -68,7 +74,7 @@ import Testing
     @Test func ageRestricted() {
         #expect(classify("ERROR: [youtube] abc: Sign in to confirm your age. This video may be inappropriate for some users.", .safari)
                 == .ageRestricted(.safari))
-        #expect(classify("ERROR: [youtube] abc: Sign in to confirm you're not a bot") == .needsToolUpdate)
+        #expect(classify("ERROR: [youtube] abc: Sign in to confirm you're not a bot") == .youtubeBotCheck(.chrome))
     }
 
     @Test func unsupportedLink() {
@@ -111,7 +117,7 @@ import Testing
         let all: [UserFacingError] = [
             .instagramLoginRequired(.chrome), .privateOrDeleted, .needsToolUpdate, .noInternet,
             .destinationNotWritable, .safariNeedsFullDiskAccess, .browserCookiesUnavailable(.edge),
-            .unsupportedLink, .unknown(details: "x"), .cancelled, .ageRestricted(.chrome), .serverBusy,
+            .unsupportedLink, .unknown(details: "x"), .cancelled, .ageRestricted(.chrome), .serverBusy, .youtubeBotCheck(.safari),
         ]
         for e in all { #expect(!e.message.isEmpty) }
         #expect(UserFacingError.privateOrDeleted.message == "Bu gönderi görünmüyor; özel hesap ya da silinmiş olabilir.")

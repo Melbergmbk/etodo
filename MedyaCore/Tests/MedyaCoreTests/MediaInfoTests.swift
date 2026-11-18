@@ -108,4 +108,12 @@ import Foundation
         #expect(info.qualityName(forHeight: 1080) == 1080)
         #expect(info.qualityName(forHeight: 999) == 999)
     }
+
+    @Test func remembersQualityClosestToLastChoice() {
+        let info = MediaInfo(title: "t", uploader: nil, duration: nil, thumbnailURL: nil, availableHeights: [2160, 1080, 720, 480])
+        #expect(info.height(closestTo: nil) == 2160)
+        #expect(info.height(closestTo: 1080) == 1080)
+        #expect(info.height(closestTo: 900) == 720)
+        #expect(info.height(closestTo: 360) == 480)
+    }
 }

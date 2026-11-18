@@ -53,6 +53,9 @@ final class AppModel {
     var keychainPrompt: Browser?
     @ObservationIgnored private var keychainAnswer: CheckedContinuation<Bool, Never>?
     static let audioRates = [320, 192, 128]
+    static let formatKey = "lastFormat"
+    static let heightKey = "lastVideoHeight"
+    static let audioKey = "lastAudioKbps"
 
     private(set) var disclaimerAccepted: Bool
     private(set) var toolsState: ToolsState = .checking
@@ -76,9 +79,19 @@ final class AppModel {
         didSet { if link != oldValue { linkChanged() } }
     }
     private(set) var preview: PreviewState = .empty
-    var formatKind: FormatKind = .video { didSet { resetFinished() } }
-    var videoHeight: Int? { didSet { resetFinished() } }
-    var audioKbps = 320 { didSet { resetFinished() } }
+    /// Biçim ve kalite seçimleri hatırlanır; haftada bir MP3 indiren her seferinde yeniden seçmesin.
+    var formatKind: FormatKind = .video {
+        didSet { resetFinished(); defaults.set(formatKind == .audio ? "audio" : "video", forKey: Self.formatKey) }
+    }
+    var videoHeight: Int? {
+        didSet {
+            resetFinished()
+            if !applyingPreferredHeight, let videoHeight { defaults.set(videoHeight, forKey: Self.heightKey) }
+        }
+    }
+    var audioKbps = 192 {
+        didSet { resetFinished(); defaults.set(audioKbps, forKey: Self.audioKey) }
+    }
     private(set) var destination: URL
     private(set) var recentFolders: [URL]
     private(set) var phase: DownloadPhase = .idle
@@ -91,6 +104,7 @@ final class AppModel {
     @ObservationIgnored private var periodicUpdates: Task<Void, Never>?
     @ObservationIgnored private var toastTask: Task<Void, Never>?
     @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private var applyingPreferredHeight = false
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -106,6 +120,9 @@ final class AppModel {
         destination = FolderLayout.parentFolder(stored: defaults.string(forKey: "destination") ?? old?.string(forKey: "destination"),
                                                 fallback: fallback)
         disclaimerAccepted = defaults.bool(forKey: Self.disclaimerKey)
+        formatKind = defaults.string(forKey: Self.formatKey) == "audio" ? .audio : .video
+        let savedKbps = defaults.integer(forKey: Self.audioKey)
+        audioKbps = Self.audioRates.contains(savedKbps) ? savedKbps : 192
         browser = Browser(rawValue: defaults.string(forKey: Self.browserKey) ?? "") ?? Self.systemDefaultBrowser()
         defaults.set(destination.path, forKey: "destination")
         defaults.set(recentFolders.map(\.path), forKey: "recentFolders")
@@ -311,7 +328,10 @@ final class AppModel {
             guard !Task.isCancelled else { return }
             switch result {
             case .media(let info):
-                videoHeight = info.availableHeights.first
+                let preferred = defaults.object(forKey: Self.heightKey) as? Int
+                applyingPreferredHeight = true
+                videoHeight = info.height(closestTo: preferred)
+                applyingPreferredHeight = false
                 preview = .media(info)
             case .images:
                 preview = .gallery
@@ -330,6 +350,7 @@ final class AppModel {
         let request = makeRequest(url, site, format: selectedFormat)
         error = nil
         phase = .starting
+        DoneNotifier.requestPermission()
         downloadTask = Task { [weak self] in
             await self?.perform(request, with: downloader)
         }
@@ -361,6 +382,7 @@ final class AppModel {
             continuation.finish()
             await consumer.value
             phase = .done(files)
+            DoneNotifier.notify(files)
             remember(request.destination)
             await logDownload(files)
         } catch {
@@ -473,6 +495,30 @@ final class AppModel {
     private func remember(_ folder: URL) {
         recentFolders = Array(([folder] + recentFolders.filter { $0.standardizedFileURL != folder.standardizedFileURL }).prefix(3))
         defaults.set(recentFolders.map(\.path), forKey: "recentFolders")
+    }
+
+    // MARK: Sorun bildirimi
+
+    /// Hata metninin başına eklenen sürüm bilgileri; kişisel veri (link, dosya adı) içermez.
+    var diagnostics: String {
+        let info = Bundle.main.infoDictionary
+        let app = "\(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))"
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        let tools = toolStatuses.map { "\($0.kind.displayName) \($0.installedVersion ?? "yok")" }.joined(separator: ", ")
+        return """
+        Etodo \(app) · macOS \(os.majorVersion).\(os.minorVersion).\(os.patchVersion) · \(Self.chipName())
+        Tarayıcı: \(browser.displayName)
+        Araçlar: \(tools.isEmpty ? "bilinmiyor" : tools)
+        """
+    }
+
+    private static func chipName() -> String {
+        var size = 0
+        sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)
+        var buffer = [CChar](repeating: 0, count: max(size, 1))
+        sysctlbyname("machdep.cpu.brand_string", &buffer, &size, nil, 0)
+        let name = String(cString: buffer)
+        return name.isEmpty ? "bilinmeyen işlemci" : name
     }
 
     // MARK: Yardımcılar

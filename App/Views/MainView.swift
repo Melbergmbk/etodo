@@ -31,7 +31,7 @@ struct MainView: View {
             }
 
             if let error = model.error {
-                ErrorBanner(error: error) { model.error = nil }
+                ErrorBanner(error: error, diagnostics: model.diagnostics) { model.error = nil }
                     .padding(.top, 16)
                     .transition(.opacity)
             }
