@@ -69,11 +69,19 @@ import Foundation
     }
 
     @Test func infoArguments() {
-        let a = CommandBuilder.infoArguments(request(.youtube, .video(maxHeight: nil), browser: .firefox))
+        let a = CommandBuilder.infoArguments(request(.youtube, .video(maxHeight: nil), browser: .firefox), tools: tools)
         #expect(a.contains("-J"))
+        #expect(contains(a, ["--remote-components", "ejs:github"]))
+        #expect(contains(a, ["--js-runtimes", "deno:/t/deno"]))
         #expect(a.contains("--no-playlist"))
         #expect(contains(a, ["--cookies-from-browser", "firefox"]))
         #expect(a.last == "https://youtu.be/abc")
+    }
+
+    @Test func infoArgumentsInstagramHasNoYoutubeFlags() {
+        let a = CommandBuilder.infoArguments(request(.instagram, .video(maxHeight: nil)), tools: tools)
+        #expect(!a.contains("--js-runtimes"))
+        #expect(!a.contains("--remote-components"))
     }
 
     @Test func galleryDL() {

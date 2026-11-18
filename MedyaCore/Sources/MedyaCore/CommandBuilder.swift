@@ -1,8 +1,13 @@
 import Foundation
 
 public enum CommandBuilder {
-    public static func infoArguments(_ r: DownloadRequest) -> [String] {
-        ["--cookies-from-browser", r.browser.rawValue, "--no-playlist", "-J", r.url.absoluteString]
+    public static func infoArguments(_ r: DownloadRequest, tools: ToolPaths) -> [String] {
+        var args = ["--cookies-from-browser", r.browser.rawValue, "--no-playlist", "-J"]
+        if r.site == .youtube {
+            args += ["--remote-components", "ejs:github", "--js-runtimes", "deno:\(tools.deno.path)"]
+        }
+        args.append(r.url.absoluteString)
+        return args
     }
 
     public static func ytdlpArguments(_ r: DownloadRequest, tools: ToolPaths) -> [String] {
