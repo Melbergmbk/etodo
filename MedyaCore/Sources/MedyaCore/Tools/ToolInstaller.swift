@@ -16,12 +16,22 @@ struct ToolInstaller: Sendable {
         return URL(fileURLWithPath: dest).lastPathComponent
     }
 
-    /// Yeni sürüm kurulduysa `true`, zaten güncelse `false`.
-    /// `beforeSwitch`: etkinleştirmeden hemen önce beklenecek şey (devam eden indirme varsa bekler).
-    func install(_ kind: ToolKind, spec: ReleaseSpec, progress: @escaping @Sendable (Double) -> Void,
-                 beforeSwitch: @Sendable () async -> Void) async throws -> Bool {
+    /// Sürümü hazırlar (indir, doğrula, aç, imzala, sağlık kontrolü) ama etkinleştirmez.
+    /// `true`: `commit` ile etkinleştirilmeli; `false`: zaten güncel.
+    /// `extraCheck`: etkinleştirmeden önce sürüm klasörüne uygulanan ek hazırlık/sağlık adımı (hata fırlatırsa kurulum iptal olur).
+    func prepare(_ kind: ToolKind, spec: ReleaseSpec, progress: @escaping @Sendable (Double) -> Void,
+                 extraCheck: (@Sendable (URL) async throws -> Void)? = nil) async throws -> Bool {
+        guard ToolKind.isSafeVersion(spec.version) else { throw ToolError.unsafeRelease(spec.version) }
         if currentVersion(kind) == spec.version { return false }
         let fm = FileManager.default
+        let versionDir = kindDir(kind).appendingPathComponent(spec.version, isDirectory: true)
+
+        // Saklanan önceki sürüme dönülüyorsa klasörü silmeden sağlığına bak.
+        if fm.fileExists(atPath: versionDir.path) {
+            if (try? await check(kind, versionDir, extraCheck)) != nil { return true }
+            try? fm.removeItem(at: versionDir)
+        }
+
         let staging = toolsDir.appendingPathComponent(".staging-\(UUID().uuidString)", isDirectory: true)
         let out = staging.appendingPathComponent("out", isDirectory: true)
         try fm.createDirectory(at: out, withIntermediateDirectories: true)
@@ -35,38 +45,60 @@ struct ToolInstaller: Sendable {
             try await verify(file, a)
             try await unpack(a.unpack, file: file, into: out)
         }
+        try rejectEscapingSymlinks(in: out)
 
         let content: URL
         if case .tarGzPython = spec.artifacts[0].unpack { content = out.appendingPathComponent("python", isDirectory: true) } else { content = out }
         try fm.createDirectory(at: kindDir(kind), withIntermediateDirectories: true)
-        let versionDir = kindDir(kind).appendingPathComponent(spec.version, isDirectory: true)
-        try? fm.removeItem(at: versionDir)
         try fm.moveItem(at: content, to: versionDir)
 
-        do {
-            for rel in kind.executables {
-                let exe = versionDir.appendingPathComponent(rel)
-                guard fm.fileExists(atPath: exe.path) else { throw ToolError.healthCheckFailed(rel) }
-                try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: exe.path)
-                await prepare(exe)
-            }
-            for rel in kind.executables where !(await healthy(versionDir.appendingPathComponent(rel), kind.healthArguments)) {
-                throw ToolError.healthCheckFailed(rel)
-            }
-        } catch {
+        do { try await check(kind, versionDir, extraCheck) } catch {
             try? fm.removeItem(at: versionDir)
             throw error
         }
-
-        await beforeSwitch()
-        let previous = currentVersion(kind)
-        try switchCurrent(kind, to: spec.version)
-        prune(kind, keep: [spec.version] + (previous.map { [$0] } ?? []))
         return true
     }
 
+    private func check(_ kind: ToolKind, _ versionDir: URL, _ extra: (@Sendable (URL) async throws -> Void)?) async throws {
+        let fm = FileManager.default
+        for rel in kind.executables {
+            let exe = versionDir.appendingPathComponent(rel)
+            guard fm.fileExists(atPath: exe.path) else { throw ToolError.healthCheckFailed(rel) }
+            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: exe.path)
+            await prepareBinary(exe)
+        }
+        for rel in kind.executables where !(await healthy(versionDir.appendingPathComponent(rel), kind.healthArguments)) {
+            throw ToolError.healthCheckFailed(rel)
+        }
+        try await extra?(versionDir)
+    }
+
+    /// Eşzamanlı (await yok): `current` bağlantısını çevirir, eskileri budar.
+    func commit(_ kind: ToolKind, version: String) throws {
+        let previous = currentVersion(kind)
+        try switchCurrent(kind, to: version)
+        prune(kind, keep: [version] + (previous.map { [$0] } ?? []))
+    }
+
+    /// Açılan arşivde, hedefi çıkış klasörü dışına taşan (ya da mutlak) sembolik bağlantı varsa reddeder.
+    func rejectEscapingSymlinks(in out: URL) throws {
+        let fm = FileManager.default
+        let base = out.standardizedFileURL.path
+        guard let walker = fm.enumerator(at: out, includingPropertiesForKeys: [.isSymbolicLinkKey]) else { return }
+        for case let item as URL in walker {
+            guard (try? item.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true,
+                  let dest = try? fm.destinationOfSymbolicLink(atPath: item.path) else { continue }
+            let resolved = dest.hasPrefix("/")
+                ? URL(fileURLWithPath: dest).standardizedFileURL
+                : item.deletingLastPathComponent().appendingPathComponent(dest).standardizedFileURL
+            if dest.hasPrefix("/") || !(resolved.path == base || resolved.path.hasPrefix(base + "/")) {
+                throw ToolError.unsafeRelease("symlink \(item.lastPathComponent) -> \(dest)")
+            }
+        }
+    }
+
     /// Karantina işaretini kaldırır (yoksa sessiz geçer) ve geçici (ad-hoc) imzalar.
-    func prepare(_ exe: URL) async {
+    func prepareBinary(_ exe: URL) async {
         _ = try? await runner.run(URL(fileURLWithPath: "/usr/bin/xattr"), ["-d", "com.apple.quarantine", exe.path], environment: [:], onLine: { _ in })
         _ = try? await runner.run(URL(fileURLWithPath: "/usr/bin/codesign"), ["--force", "-s", "-", exe.path], environment: [:], onLine: { _ in })
     }

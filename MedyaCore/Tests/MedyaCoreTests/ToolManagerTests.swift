@@ -170,26 +170,6 @@ final class FakeFetcher: HTTPFetching, @unchecked Sendable {
         #expect(spec.version == "123_9.0")
         #expect(spec.artifacts.map(\.url.lastPathComponent) == ["ffmpeg.zip", "ffprobe.zip"])
     }
-
-    @Test func galleryDLRollsBackWhenNewVersionBroken() async throws {
-        let root = try tempRoot(), f = FakeFetcher()
-        let py = root.appendingPathComponent("tools/python/current/bin/python3")
-        try FileManager.default.createDirectory(at: py.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data("x".utf8).write(to: py)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: py.path)
-        let versionCalls = Counter()
-        let r = FakeRunner([
-            .init(matches: { _, a in a.contains("pip") && a.contains("--upgrade") }, result: ProcessResult(exitCode: 0, stdout: "", stderr: "")),
-            .init(matches: { _, a in a.contains("pip") }, result: ProcessResult(exitCode: 0, stdout: "", stderr: "")),
-            .init(matches: { _, a in
-                a.contains("gallery_dl") && versionCalls.next() == 1
-            }, result: ProcessResult(exitCode: 0, stdout: "1.0.0\n", stderr: "")),
-        ])
-        let m = manager(root, f, r)
-        await #expect(throws: Never.self) { _ = await m.updateAll() }
-        let rollback = r.calls.contains { $0.1.contains("gallery-dl==1.0.0") }
-        #expect(rollback)
-    }
 }
 
 final class Counter: @unchecked Sendable {

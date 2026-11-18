@@ -42,6 +42,8 @@ enum ToolError: Error, Equatable {
     case assetNotFound(String)
     case healthCheckFailed(String)
     case unpackFailed(String)
+    /// Uzaktan gelen sürüm adı ya da adres güvenli değil
+    case unsafeRelease(String)
 }
 
 private struct GitHubRelease: Decodable {
@@ -77,8 +79,19 @@ extension ToolKind {
         return a
     }
 
+    /// Sürüm adı klasör adı olarak kullanılır; yol kaçışına izin vermez.
+    static func isSafeVersion(_ v: String) -> Bool {
+        v.range(of: #"^[A-Za-z0-9][A-Za-z0-9._+-]*$"#, options: .regularExpression) != nil && v != "current"
+    }
+
     /// `.galleryDL` için çağrılmaz (pip ile kurulur).
     func resolve(arch: String, fetcher: HTTPFetching) async throws -> ReleaseSpec {
+        let spec = try await fetchSpec(arch: arch, fetcher: fetcher)
+        guard Self.isSafeVersion(spec.version) else { throw ToolError.unsafeRelease(spec.version) }
+        return spec
+    }
+
+    private func fetchSpec(arch: String, fetcher: HTTPFetching) async throws -> ReleaseSpec {
         let gh = arch == "arm64" ? "aarch64" : "x86_64"
         switch self {
         case .ytdlp:
@@ -106,6 +119,7 @@ extension ToolKind {
             let a = arch == "arm64" ? "arm64" : "amd64"
             let latest = Self.ffmpegBase.appendingPathComponent("redirect/latest/macos/\(a)/release/ffmpeg.zip")
             let final = try await fetcher.finalURL(of: latest)
+            guard final.scheme == "https", final.host == Self.ffmpegBase.host else { throw ToolError.unsafeRelease(final.absoluteString) }
             let dir = final.deletingLastPathComponent()
             let version = dir.lastPathComponent
             func artifact(_ name: String) -> Artifact {
