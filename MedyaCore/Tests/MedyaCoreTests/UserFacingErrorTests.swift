@@ -47,6 +47,16 @@ import Testing
                 == .browserCookiesUnavailable(.brave))
     }
 
+    @Test func galleryDLCookieAndLoginErrors() {
+        let both = """
+        [instagram][warning] cookies: Unable to find chrome cookies database in '/Users/x/Library/Application Support/Google/Chrome'
+        [instagram][error] HTTP redirect to login page (https://www.instagram.com/accounts/login/)
+        """
+        #expect(classify(both, .chrome) == .browserCookiesUnavailable(.chrome))
+        #expect(classify("[instagram][error] HTTP redirect to login page (https://www.instagram.com/accounts/login/)", .chrome)
+                == .instagramLoginRequired(.chrome))
+    }
+
     @Test func unsupportedLink() {
         #expect(classify("ERROR: Unsupported URL: https://example.com/foo") == .unsupportedLink)
     }

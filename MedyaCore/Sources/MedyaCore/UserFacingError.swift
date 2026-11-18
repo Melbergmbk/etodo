@@ -58,12 +58,12 @@ public enum UserFacingError: Error, Equatable, Sendable {
         func has(_ needles: String...) -> Bool { needles.contains { text.contains($0) } }
 
         if has("operation not permitted") && has("cookies.binarycookies") { return .safariNeedsFullDiskAccess }
-        if text.range(of: #"could not find .* cookies database"#, options: .regularExpression) != nil {
+        if text.range(of: #"(could not|unable to) find .* cookies database"#, options: .regularExpression) != nil {
             return .browserCookiesUnavailable(browser)
         }
         if has("unable to download") && has("errno 8", "nodename nor servname", "errno 51", "network is unreachable", "errno 65", "no route to host", "timed out") { return .noInternet }
         if has("unsupported url") { return .unsupportedLink }
-        if has("instagram") && has("login required", "rate-limit reached", "requested content is not available") {
+        if has("instagram") && has("login required", "rate-limit reached", "requested content is not available", "redirect to login page") {
             return .instagramLoginRequired(browser)
         }
         if has("http error 403", "sign in to confirm", "nsig extraction failed") { return .needsToolUpdate }
