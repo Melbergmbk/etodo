@@ -1,6 +1,8 @@
 #!/bin/zsh
 # Yeni sürüm yayınlar: .dmg derler, Sparkle appcast'ini imzalar, GitHub Release açar.
-# Önce project.yml'de MARKETING_VERSION ve CURRENT_PROJECT_VERSION artırılıp commit'lenmiş ve push'lanmış olmalı.
+# Önce project.yml'de CURRENT_PROJECT_VERSION (ve yeni sürümse MARKETING_VERSION) artırılıp commit'lenmiş ve push'lanmış olmalı.
+# Geliştirme döneminde aynı sürümü yenilemek için: ETODO_REPLACE=1 scripts/release.sh
+#   (MARKETING_VERSION aynı kalır; yalnız CURRENT_PROJECT_VERSION artar, eski yayın silinip yerine yenisi konur.)
 # İmza anahtarı ve kod imzalama sertifikası yalnız bu Mac'in Anahtar Zinciri'nde.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -23,7 +25,11 @@ ETODO_REQUIRE_CERT=1 scripts/build-dmg.sh >/dev/null
 dmg=$(ls -t build/Etodo-*.dmg | head -1)
 version=${${dmg:t:r}#Etodo-}
 tag=v$version
-gh release view "$tag" --repo "$repo" >/dev/null 2>&1 && { echo "$tag zaten yayınlanmış; sürümü artır."; exit 1; }
+replace=
+if gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
+  [[ "${ETODO_REPLACE:-}" == 1 ]] || { echo "$tag zaten yayınlanmış; sürümü artır ya da ETODO_REPLACE=1 ile aynı sürümü yenile."; exit 1; }
+  replace=1
+fi
 
 feed=$(mktemp -d)
 stable_dir=$(mktemp -d)
@@ -34,6 +40,12 @@ build/rel/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast \
 
 # README'deki sabit indirme bağlantısı için sürümsüz adlı bir kopya da yüklenir.
 cp "$dmg" "$stable_dir/Etodo.dmg"
+
+# Aynı sürüm yenileniyorsa eski yayın ve etiketi kaldırılır (kısa aralıkta "en son" bir önceki yayına düşer; zararsız).
+if [[ -n "$replace" ]]; then
+  gh release delete "$tag" --repo "$repo" --cleanup-tag --yes
+  git tag -d "$tag" >/dev/null 2>&1 || true
+fi
 
 # Etiketi GitHub kendisi oluşturur; gh başarısız olursa yerelde yarım etiket kalmaz.
 gh release create "$tag" "$dmg" "$stable_dir/Etodo.dmg" "$feed/appcast.xml" --repo "$repo" \

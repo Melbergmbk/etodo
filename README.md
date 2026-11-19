@@ -54,7 +54,12 @@ Hepsi bu. Bundan sonra Etodo her zaman normal bir uygulama gibi açılır.
 
 1. Üstten siteyi seç: **YouTube**, **Instagram** ya da **Diğer** (X, TikTok ve yüzlerce site).
 2. Linki yapıştır (**⌘V**). Etodo videonun ön izlemesini gösterir.
-3. **MP4** (video) ya da **MP3** (ses) seç, kaliteyi belirle — her seçeneğin yanında dosyanın yaklaşık boyutu yazar — ve **İndir**'e bas.
+3. **MP4** (video) ya da **MP3** (ses) seç, kaliteyi belirle — her seçeneğin yanında dosyanın yaklaşık boyutu yazar — ve **İndir**'e bas. Etodo son seçimini hatırlar.
+4. İndirme sürerken bir sonraki linki yapıştırıp **Sıraya ekle**'ye basabilirsin; sırayla iner.
+
+Pencerenin altındaki **İndirmeler** listesinde süren, sıradaki ve biten indirmeler görünür. Bitenlerin yanında **Göster** (Finder'da açar) ve **Tekrar indir** vardır. Liste son 20 indirmeyi yalnız bu Mac'te tutar; **Bitenleri temizle** ile silinir. Uzun bir indirme bitince Mac bildirimi gelir.
+
+YouTube videolarında **Türkçe ya da İngilizce altyazı ekle** kutusunu işaretlersen, varsa altyazı videonun içine eklenir (QuickTime'da Görüntü › Altyazılar).
 
 Dosyalar kendiliğinden düzenli klasörlere iner:
 
@@ -76,7 +81,11 @@ Kayıt yerini indirme butonunun üstündeki klasör menüsünden değiştirebili
 Instagram, giriş yapmadan çoğu içeriği vermez. Etodo bu durumda bilgisayarındaki tarayıcıda (ör. Chrome) açık olan Instagram oturumunu kullanır. Bunun için:
 
 1. Tarayıcında Instagram hesabına giriş yapmış ol.
-2. Etodo ilk seferde **Tam Disk Erişimi** isteyecek. Hata kutusundaki adımları izle: **Ayarları Aç** → listede Etodo yoksa alttaki **+** ile ekle → anahtarı aç → Etodo'yu kapatıp yeniden aç.
+2. Etodo'nun Ayarlar › Genel bölümünde o tarayıcıyı seç.
+3. **Chrome, Brave ya da Edge** kullanıyorsan macOS ilk seferde bir kez Mac'inin giriş şifresini sorar; şifreyi yazıp **Her Zaman İzin Ver**'i seç.
+4. **Safari** kullanıyorsan Etodo bir kez **Tam Disk Erişimi** ister. Hata kutusundaki adımları izle: **Ayarları Aç** → listede Etodo yoksa alttaki **+** ile ekle → anahtarı aç → Etodo'yu kapatıp yeniden aç.
+
+Arc ya da Opera desteklenmiyor; bunları kullanıyorsan Instagram'a bir kez Chrome, Safari ya da Firefox'ta giriş yap.
 
 Çerezlerin bilgisayarından hiçbir yere gönderilmez. Yalnızca indirme sırasında, senin Mac'inde kullanılır.
 
@@ -84,7 +93,7 @@ Instagram, giriş yapmadan çoğu içeriği vermez. Etodo bu durumda bilgisayar�
 
 ## Güncellemeler
 
-Etodo hem kendisini hem indirme araçlarını güncel tutar. Yeni sürüm çıkınca pencerenin sağ üstünde küçük bir **Yeni sürüm** rozeti belirir; tıklaman yeterli.
+Etodo hem kendisini hem indirme araçlarını güncel tutar. Yeni sürüm çıkınca bir pencere açılır ve pencerenin sağ üstünde küçük bir **Yeni sürüm** rozeti belirir. Beklemeden bakmak için menüden **Etodo › Güncellemeleri Kontrol Et…**
 
 ---
 
