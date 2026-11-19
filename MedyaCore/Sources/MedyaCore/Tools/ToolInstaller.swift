@@ -161,8 +161,6 @@ struct ToolInstaller: Sendable {
 
     private func unpack(_ kind: Unpack, file: URL, into out: URL) async throws {
         switch kind {
-        case .copy(let name):
-            try FileManager.default.copyItem(at: file, to: out.appendingPathComponent(name))
         case .tarGzPython:
             try await extract("/usr/bin/tar", ["-xzf", file.path, "-C", out.path])
         case .zip:

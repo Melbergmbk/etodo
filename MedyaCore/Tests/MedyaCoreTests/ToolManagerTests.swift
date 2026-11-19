@@ -32,8 +32,6 @@ final class FakeFetcher: HTTPFetching, @unchecked Sendable {
 }
 
 @Suite struct ToolManagerTests {
-    static let api = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
-
     func tempRoot() throws -> URL {
         let d = FileManager.default.temporaryDirectory.appendingPathComponent("mi-tools-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
@@ -41,25 +39,7 @@ final class FakeFetcher: HTTPFetching, @unchecked Sendable {
     }
     func sha(_ d: Data) -> String { SHA256.hash(data: d).map { String(format: "%02x", $0) }.joined() }
 
-    /// yt-dlp sürümü yayımlar: ikili + SHA2-256SUMS
-    func publishYtdlp(_ f: FakeFetcher, version: String, content: String? = nil, sumOverride: String? = nil) {
-        let bin = Data((content ?? "binary-\(version)").utf8)
-        f.set(Self.api, """
-        {"tag_name":"\(version)","assets":[
-         {"name":"yt-dlp_macos","browser_download_url":"https://dl.test/\(version)/yt-dlp_macos"},
-         {"name":"SHA2-256SUMS","browser_download_url":"https://dl.test/\(version)/SHA2-256SUMS"}]}
-        """)
-        f.set("https://dl.test/\(version)/yt-dlp_macos", bin)
-        f.set("https://dl.test/\(version)/SHA2-256SUMS", "\(sumOverride ?? sha(bin))  yt-dlp_macos\n0000  yt-dlp.exe\n")
-    }
-
-    func runner(failingVersion: String? = nil) -> FakeRunner {
-        FakeRunner([.init(matches: { u, a in
-            u.lastPathComponent == "yt-dlp" && a == ["--version"] && !(failingVersion.map { u.path.contains("/\($0)/") } ?? false)
-        }, result: ProcessResult(exitCode: 0, stdout: "ok\n", stderr: ""))])
-    }
-
-    func manager(_ root: URL, _ f: FakeFetcher, _ r: FakeRunner) -> ToolManager {
+    func manager(_ root: URL, _ f: FakeFetcher, _ r: any ProcessRunning) -> ToolManager {
         ToolManager(root: root, fetcher: f, runner: r, arch: "arm64")
     }
 
@@ -77,27 +57,27 @@ final class FakeFetcher: HTTPFetching, @unchecked Sendable {
     }
 
     func versionDirs(_ root: URL) -> [String] {
-        let dir = root.appendingPathComponent("tools/ytdlp")
+        let dir = root.appendingPathComponent("tools/deno")
         return ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []).filter { $0 != "current" }.sorted()
     }
     func current(_ root: URL) -> String? {
-        (try? FileManager.default.destinationOfSymbolicLink(atPath: root.appendingPathComponent("tools/ytdlp/current").path))
+        (try? FileManager.default.destinationOfSymbolicLink(atPath: root.appendingPathComponent("tools/deno/current").path))
     }
 
     @Test func checksumMismatchInstallsNothing() async throws {
         let root = try tempRoot(), f = FakeFetcher()
-        publishYtdlp(f, version: "v1", sumOverride: String(repeating: "a", count: 64))
-        let m = manager(root, f, runner())
+        DenoRelease.publish(f, version: "v1", sumOverride: String(repeating: "a", count: 64))
+        let m = manager(root, f, DenoRelease.runner())
         let updated = await m.updateAll()
-        #expect(!updated.contains(.ytdlp))
+        #expect(!updated.contains(.deno))
         #expect(versionDirs(root).isEmpty)
         #expect(current(root) == nil)
     }
 
     @Test func checksumMismatchSurfacesAsError() async throws {
         let root = try tempRoot(), f = FakeFetcher()
-        publishYtdlp(f, version: "v1", sumOverride: String(repeating: "a", count: 64))
-        let m = manager(root, f, runner())
+        DenoRelease.publish(f, version: "v1", sumOverride: String(repeating: "a", count: 64))
+        let m = manager(root, f, DenoRelease.runner())
         await #expect(throws: UserFacingError.self) { try await m.installMissing { _, _ in } }
     }
 
@@ -105,46 +85,46 @@ final class FakeFetcher: HTTPFetching, @unchecked Sendable {
     func githubLimitOrOutageSaysTryLater(_ code: Int) async throws {
         let root = try tempRoot(), f = FakeFetcher()
         f.failure = FetchError.badStatus(code)
-        let m = manager(root, f, runner())
+        let m = manager(root, f, DenoRelease.runner())
         await #expect(throws: UserFacingError.serverBusy) { try await m.installMissing { _, _ in } }
     }
 
     @Test func failedHealthCheckKeepsOldVersion() async throws {
         let root = try tempRoot(), f = FakeFetcher()
-        publishYtdlp(f, version: "v1")
-        let m = manager(root, f, runner(failingVersion: "v2"))
-        #expect(await m.updateAll().contains(.ytdlp))
+        DenoRelease.publish(f, version: "v1")
+        let m = manager(root, f, DenoRelease.runner(failingVersion: "v2"))
+        #expect(await m.updateAll().contains(.deno))
         #expect(current(root) == "v1")
-        publishYtdlp(f, version: "v2")
-        #expect(!(await m.updateAll().contains(.ytdlp)))
+        DenoRelease.publish(f, version: "v2")
+        #expect(!(await m.updateAll().contains(.deno)))
         #expect(current(root) == "v1")
         #expect(versionDirs(root) == ["v1"])
     }
 
     @Test func swapWaitsForActiveDownload() async throws {
         let root = try tempRoot(), f = FakeFetcher()
-        publishYtdlp(f, version: "v1")
-        let m = manager(root, f, runner())
+        DenoRelease.publish(f, version: "v1")
+        let m = manager(root, f, DenoRelease.runner())
         _ = await m.updateAll()
-        publishYtdlp(f, version: "v2")
+        DenoRelease.publish(f, version: "v2")
         await m.beginDownload()
         let task = Task { await m.updateAll() }
-        for _ in 0..<100 where !f.requested.contains(URL(string: "https://dl.test/v2/yt-dlp_macos")!) {
+        for _ in 0..<100 where !f.requested.contains(URL(string: DenoRelease.url("v2"))!) {
             try await Task.sleep(for: .milliseconds(20))
         }
         try await Task.sleep(for: .milliseconds(150))
         #expect(current(root) == "v1")
         await m.endDownload()
-        #expect(await task.value.contains(.ytdlp))
+        #expect(await task.value.contains(.deno))
         #expect(current(root) == "v2")
     }
 
     @Test func onlyTwoVersionFoldersRemain() async throws {
         let root = try tempRoot(), f = FakeFetcher()
-        let m = manager(root, f, runner())
+        let m = manager(root, f, DenoRelease.runner())
         for v in ["v1", "v2", "v3"] {
-            publishYtdlp(f, version: v)
-            #expect(await m.updateAll().contains(.ytdlp))
+            DenoRelease.publish(f, version: v)
+            #expect(await m.updateAll().contains(.deno))
         }
         #expect(versionDirs(root) == ["v2", "v3"])
         #expect(current(root) == "v3")
@@ -152,16 +132,16 @@ final class FakeFetcher: HTTPFetching, @unchecked Sendable {
 
     @Test func sameVersionIsNotReinstalled() async throws {
         let root = try tempRoot(), f = FakeFetcher()
-        publishYtdlp(f, version: "v1")
-        let m = manager(root, f, runner())
+        DenoRelease.publish(f, version: "v1")
+        let m = manager(root, f, DenoRelease.runner())
         _ = await m.updateAll()
-        #expect(!(await m.updateAll().contains(.ytdlp)))
+        #expect(!(await m.updateAll().contains(.deno)))
     }
 
     @Test func networkFailureIsNoInternet() async throws {
         let root = try tempRoot(), f = FakeFetcher()
         f.failure = URLError(.notConnectedToInternet)
-        let m = manager(root, f, runner())
+        let m = manager(root, f, DenoRelease.runner())
         do {
             try await m.installMissing { _, _ in }
             Issue.record("hata bekleniyordu")
@@ -172,14 +152,15 @@ final class FakeFetcher: HTTPFetching, @unchecked Sendable {
 
     @Test func statusAndPathsAfterInstall() async throws {
         let root = try tempRoot(), f = FakeFetcher()
-        publishYtdlp(f, version: "v1")
-        let m = manager(root, f, runner())
+        DenoRelease.publish(f, version: "v1")
+        let m = manager(root, f, DenoRelease.runner())
         _ = await m.updateAll()
-        let st = await m.status().first { $0.kind == .ytdlp }
+        let st = await m.status().first { $0.kind == .deno }
         #expect(st?.installedVersion == "v1")
         #expect(st?.isReady == true)
         let paths = await m.paths
-        #expect(FileManager.default.isExecutableFile(atPath: paths.ytdlp.path))
+        #expect(FileManager.default.isExecutableFile(atPath: paths.deno.path))
+        #expect(paths.ytdlp.path.hasSuffix("tools/bin/yt-dlp"))
         #expect(paths.galleryDL.path.hasSuffix("tools/bin/gallery-dl"))
     }
 

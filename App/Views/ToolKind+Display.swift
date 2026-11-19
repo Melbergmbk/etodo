@@ -10,7 +10,7 @@ extension ToolKind {
         switch self {
         case .ytdlp: "video ve ses indirici"
         case .galleryDL: "Instagram fotoğraf/galeri"
-        case .python: "gallery-dl'in çalışma ortamı"
+        case .python: "yt-dlp ve gallery-dl'in çalışma ortamı"
         case .ffmpeg: "görüntü + ses birleştirme"
         case .deno: "YouTube doğrulama testleri"
         }

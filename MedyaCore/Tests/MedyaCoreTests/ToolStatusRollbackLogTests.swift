@@ -4,8 +4,6 @@ import CryptoKit
 @testable import MedyaCore
 
 @Suite struct ToolStatusRollbackLogTests {
-    static let api = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
-
     func tempRoot() throws -> URL {
         let d = FileManager.default.temporaryDirectory.appendingPathComponent("mi-srl-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
@@ -13,44 +11,28 @@ import CryptoKit
     }
     func sha(_ d: Data) -> String { SHA256.hash(data: d).map { String(format: "%02x", $0) }.joined() }
 
-    func publish(_ f: FakeFetcher, _ version: String) {
-        let bin = Data("binary-\(version)".utf8)
-        f.set(Self.api, """
-        {"tag_name":"\(version)","assets":[
-         {"name":"yt-dlp_macos","browser_download_url":"https://dl.test/\(version)/yt-dlp_macos"},
-         {"name":"SHA2-256SUMS","browser_download_url":"https://dl.test/\(version)/SHA2-256SUMS"}]}
-        """)
-        f.set("https://dl.test/\(version)/yt-dlp_macos", bin)
-        f.set("https://dl.test/\(version)/SHA2-256SUMS", "\(sha(bin))  yt-dlp_macos\n")
-    }
-
-    func runner() -> FakeRunner {
-        FakeRunner([.init(matches: { u, a in u.lastPathComponent == "yt-dlp" && a == ["--version"] },
-                          result: ProcessResult(exitCode: 0, stdout: "ok\n", stderr: ""))])
-    }
-
     func manager(_ root: URL, _ f: FakeFetcher) -> ToolManager {
-        ToolManager(root: root, fetcher: f, runner: runner(), arch: "arm64")
+        ToolManager(root: root, fetcher: f, runner: DenoRelease.runner(), arch: "arm64")
     }
 
     func current(_ root: URL) -> String? {
-        try? FileManager.default.destinationOfSymbolicLink(atPath: root.appendingPathComponent("tools/ytdlp/current").path)
+        try? FileManager.default.destinationOfSymbolicLink(atPath: root.appendingPathComponent("tools/deno/current").path)
     }
 
     // MARK: ToolStatus.source / verified
 
     @Test func statusReportsSourceAndVerified() async throws {
         let root = try tempRoot(), f = FakeFetcher()
-        publish(f, "v1")
+        DenoRelease.publish(f, version: "v1")
         let m = manager(root, f)
         _ = await m.updateAll()
         let all = await m.status()
-        let yt = try #require(all.first { $0.kind == .ytdlp })
-        #expect(yt.verified)
-        #expect(yt.source == "github.com/yt-dlp")
         let deno = try #require(all.first { $0.kind == .deno })
-        #expect(!deno.verified)
+        #expect(deno.verified)
         #expect(deno.source == "github.com/denoland")
+        let yt = try #require(all.first { $0.kind == .ytdlp })
+        #expect(!yt.verified)
+        #expect(yt.source == "PyPI (pip)")
         #expect(all.first { $0.kind == .ffmpeg }?.source == "ffmpeg.martin-riedl.de")
         #expect(all.first { $0.kind == .python }?.source == "github.com/astral-sh")
         #expect(all.first { $0.kind == .galleryDL }?.source == "PyPI (pip)")
@@ -58,13 +40,13 @@ import CryptoKit
 
     @Test func installWithoutVerificationRecordIsNotVerified() async throws {
         let root = try tempRoot(), f = FakeFetcher()
-        let dir = root.appendingPathComponent("tools/ytdlp/old")
+        let dir = root.appendingPathComponent("tools/deno/old")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let exe = dir.appendingPathComponent("yt-dlp")
+        let exe = dir.appendingPathComponent("deno")
         try Data("x".utf8).write(to: exe)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: exe.path)
-        try FileManager.default.createSymbolicLink(atPath: root.appendingPathComponent("tools/ytdlp/current").path, withDestinationPath: "old")
-        let st = await manager(root, f).status().first { $0.kind == .ytdlp }
+        try FileManager.default.createSymbolicLink(atPath: root.appendingPathComponent("tools/deno/current").path, withDestinationPath: "old")
+        let st = await manager(root, f).status().first { $0.kind == .deno }
         #expect(st?.isReady == true)
         #expect(st?.verified == false)
     }
@@ -74,25 +56,25 @@ import CryptoKit
     @Test func rollbackReturnsToPreviousVersion() async throws {
         let root = try tempRoot(), f = FakeFetcher()
         let m = manager(root, f)
-        publish(f, "v1"); _ = await m.updateAll()
-        publish(f, "v2"); _ = await m.updateAll()
+        DenoRelease.publish(f, version: "v1"); _ = await m.updateAll()
+        DenoRelease.publish(f, version: "v2"); _ = await m.updateAll()
         #expect(current(root) == "v2")
-        try await m.rollback(.ytdlp)
+        try await m.rollback(.deno)
         #expect(current(root) == "v1")
-        let st = await m.status().first { $0.kind == .ytdlp }
+        let st = await m.status().first { $0.kind == .deno }
         #expect(st?.installedVersion == "v1")
         #expect(st?.verified == true)
         // Yeni sürüm de saklanır: tekrar ileri dönülebilir.
-        try await m.rollback(.ytdlp)
+        try await m.rollback(.deno)
         #expect(current(root) == "v2")
     }
 
     @Test func rollbackWithoutPreviousVersionFails() async throws {
         let root = try tempRoot(), f = FakeFetcher()
         let m = manager(root, f)
-        publish(f, "v1"); _ = await m.updateAll()
+        DenoRelease.publish(f, version: "v1"); _ = await m.updateAll()
         do {
-            try await m.rollback(.ytdlp)
+            try await m.rollback(.deno)
             Issue.record("hata bekleniyordu")
         } catch {
             #expect(error == .noPreviousVersion)
@@ -104,10 +86,10 @@ import CryptoKit
     @Test func rollbackWaitsForActiveDownload() async throws {
         let root = try tempRoot(), f = FakeFetcher()
         let m = manager(root, f)
-        publish(f, "v1"); _ = await m.updateAll()
-        publish(f, "v2"); _ = await m.updateAll()
+        DenoRelease.publish(f, version: "v1"); _ = await m.updateAll()
+        DenoRelease.publish(f, version: "v2"); _ = await m.updateAll()
         await m.beginDownload()
-        let task = Task { try await m.rollback(.ytdlp) }
+        let task = Task { try await m.rollback(.deno) }
         try await Task.sleep(for: .milliseconds(200))
         #expect(current(root) == "v2")
         await m.endDownload()
@@ -151,20 +133,20 @@ import CryptoKit
     @Test func managerLogsInstallUpdateAndRollback() async throws {
         let root = try tempRoot(), f = FakeFetcher()
         let m = manager(root, f)
-        publish(f, "v1"); _ = await m.updateAll()
-        publish(f, "v2"); _ = await m.updateAll()
-        try await m.rollback(.ytdlp)
+        DenoRelease.publish(f, version: "v1"); _ = await m.updateAll()
+        DenoRelease.publish(f, version: "v2"); _ = await m.updateAll()
+        try await m.rollback(.deno)
         let messages = await m.log.entries().map(\.message)
-        #expect(messages.contains("yt-dlp v1 kuruldu (doğrulandı)"))
-        #expect(messages.contains("yt-dlp v1 → v2 (doğrulandı, eski sürüm saklandı)"))
-        #expect(messages.contains("yt-dlp önceki sürüme döndü: v2 → v1"))
+        #expect(messages.contains("deno v1 kuruldu (doğrulandı)"))
+        #expect(messages.contains("deno v1 → v2 (doğrulandı, eski sürüm saklandı)"))
+        #expect(messages.contains("deno önceki sürüme döndü: v2 → v1"))
         #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("activity.json").path))
     }
 
     @Test func managerLogsUpToDateCheck() async throws {
         let root = try tempRoot(), f = FakeFetcher()
         let m = manager(root, f)
-        publish(f, "v1"); _ = await m.updateAll()
+        DenoRelease.publish(f, version: "v1"); _ = await m.updateAll()
         _ = await m.updateAll()
         let last = await m.log.entries().last?.message
         #expect(last?.hasPrefix("Güncelleme kontrolü") == true)
@@ -179,7 +161,7 @@ import CryptoKit
         _ = await m.updateAll()
         #expect(await m.lastCheck() == nil)
         f.failure = nil
-        publish(f, "v1")
+        DenoRelease.publish(f, version: "v1")
         _ = await m.updateAll()
         let last = try #require(await m.lastCheck())
         #expect(abs(last.timeIntervalSinceNow) < 60)
@@ -202,6 +184,10 @@ import CryptoKit
                  onLine: @escaping @Sendable (String) -> Void) async throws -> ProcessResult {
             lock.withLock {
                 if arguments.contains("pip") {
+                    // Yalnız gallery-dl'i taklit eder; diğer pip araçları kurulamaz.
+                    guard arguments.contains(where: { $0.hasPrefix("gallery-dl") }) else {
+                        return ProcessResult(exitCode: 1, stdout: "", stderr: "")
+                    }
                     if _offline {
                         return ProcessResult(exitCode: 1, stdout: "", stderr: """
                         WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object>: Failed to establish a new connection: [Errno 8] nodename nor servname provided, or not known')': /simple/gallery-dl/
@@ -259,29 +245,29 @@ import CryptoKit
     @Test func rollbackIsNotUndoneByNextUpdate() async throws {
         let root = try tempRoot(), f = FakeFetcher()
         let m = manager(root, f)
-        publish(f, "v1"); _ = await m.updateAll()
-        publish(f, "v2"); _ = await m.updateAll()
-        try await m.rollback(.ytdlp)
-        #expect(!(await m.updateAll().contains(.ytdlp)))
+        DenoRelease.publish(f, version: "v1"); _ = await m.updateAll()
+        DenoRelease.publish(f, version: "v2"); _ = await m.updateAll()
+        try await m.rollback(.deno)
+        #expect(!(await m.updateAll().contains(.deno)))
         #expect(current(root) == "v1")
         // Uygulama yeniden açıldı
         let again = manager(root, f)
-        #expect(!(await again.updateAll().contains(.ytdlp)))
+        #expect(!(await again.updateAll().contains(.deno)))
         #expect(current(root) == "v1")
     }
 
     @Test func newerVersionAfterRollbackIsInstalled() async throws {
         let root = try tempRoot(), f = FakeFetcher()
         let m = manager(root, f)
-        publish(f, "v1"); _ = await m.updateAll()
-        publish(f, "v2"); _ = await m.updateAll()
-        try await m.rollback(.ytdlp)
-        publish(f, "v3")
-        #expect(await m.updateAll().contains(.ytdlp))
+        DenoRelease.publish(f, version: "v1"); _ = await m.updateAll()
+        DenoRelease.publish(f, version: "v2"); _ = await m.updateAll()
+        try await m.rollback(.deno)
+        DenoRelease.publish(f, version: "v3")
+        #expect(await m.updateAll().contains(.deno))
         #expect(current(root) == "v3")
         // Atlama kaldırıldı: v2 yeniden yayımlanırsa (ör. geri çekilen sürüm) kurulabilir.
-        publish(f, "v2")
-        #expect(await m.updateAll().contains(.ytdlp))
+        DenoRelease.publish(f, version: "v2")
+        #expect(await m.updateAll().contains(.deno))
         #expect(current(root) == "v2")
     }
 
@@ -323,10 +309,10 @@ import CryptoKit
     @Test func statusReportsWhetherPreviousVersionIsKept() async throws {
         let root = try tempRoot(), f = FakeFetcher()
         let m = manager(root, f)
-        publish(f, "v1"); _ = await m.updateAll()
-        #expect(await m.status().first { $0.kind == .ytdlp }?.hasPrevious == false)
-        publish(f, "v2"); _ = await m.updateAll()
-        #expect(await m.status().first { $0.kind == .ytdlp }?.hasPrevious == true)
+        DenoRelease.publish(f, version: "v1"); _ = await m.updateAll()
+        #expect(await m.status().first { $0.kind == .deno }?.hasPrevious == false)
+        DenoRelease.publish(f, version: "v2"); _ = await m.updateAll()
+        #expect(await m.status().first { $0.kind == .deno }?.hasPrevious == true)
     }
 
     @Test func galleryDLHasPreviousAfterUpgrade() async throws {

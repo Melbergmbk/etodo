@@ -28,32 +28,33 @@ public actor ToolManager {
 
     private var tools: URL { installer.toolsDir }
     private var pythonExe: URL { tools.appendingPathComponent("python/current/bin/python3") }
-    private var wrapper: URL { tools.appendingPathComponent("bin/gallery-dl") }
-    private var galleryStateFile: URL { tools.appendingPathComponent("galleryDL/state") }
+    private func wrapper(_ k: ToolKind) -> URL { tools.appendingPathComponent("bin/\(k.pipPackage)") }
+    private func stateFile(_ k: ToolKind) -> URL { tools.appendingPathComponent("\(k.rawValue)/state") }
 
     public var paths: ToolPaths {
-        ToolPaths(ytdlp: tools.appendingPathComponent("ytdlp/current/yt-dlp"),
-                  galleryDL: wrapper,
+        ToolPaths(ytdlp: wrapper(.ytdlp),
+                  galleryDL: wrapper(.galleryDL),
                   ffmpegDir: tools.appendingPathComponent("ffmpeg/current"),
                   deno: tools.appendingPathComponent("deno/current/deno"))
     }
 
     // MARK: Durum
 
-    /// gallery-dl durumu: kurulduğu Python sürümü + gallery-dl sürümü (+ geri dönülebilecek önceki gallery-dl sürümü).
-    private func galleryState() -> (python: String, gallery: String, previous: String?)? {
-        guard let text = try? String(contentsOf: galleryStateFile, encoding: .utf8) else { return nil }
+    /// pip aracının durumu: kurulduğu Python sürümü + aracın sürümü (+ geri dönülebilecek önceki sürüm).
+    private func pipState(_ k: ToolKind) -> (python: String, version: String, previous: String?)? {
+        guard let text = try? String(contentsOf: stateFile(k), encoding: .utf8) else { return nil }
         let lines = text.split(whereSeparator: \.isNewline).map(String.init)
         return lines.count >= 2 ? (lines[0], lines[1], lines.count >= 3 ? lines[2] : nil) : nil
     }
 
-    /// Önceki sürüm verilmezse: gallery-dl sürümü değiştiyse eskisi, değişmediyse kayıtlı önceki saklanır.
-    private func writeGalleryState(python: String, gallery: String, previous: String? = nil) throws {
-        let old = galleryState()
-        let keep = previous ?? (old.map { $0.gallery != gallery ? $0.gallery : $0.previous } ?? nil)
-        try FileManager.default.createDirectory(at: galleryStateFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let text = "\(python)\n\(gallery)\n" + (keep.map { "\($0)\n" } ?? "")
-        try text.write(to: galleryStateFile, atomically: true, encoding: .utf8)
+    /// Önceki sürüm verilmezse: sürüm değiştiyse eskisi, değişmediyse kayıtlı önceki saklanır.
+    private func writePipState(_ k: ToolKind, python: String, version: String, previous: String? = nil) throws {
+        let old = pipState(k)
+        let keep = previous ?? (old.map { $0.version != version ? $0.version : $0.previous } ?? nil)
+        let file = stateFile(k)
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let text = "\(python)\n\(version)\n" + (keep.map { "\($0)\n" } ?? "")
+        try text.write(to: file, atomically: true, encoding: .utf8)
     }
 
     /// Son başarılı (internete ulaşılan) güncelleme kontrolü.
@@ -66,12 +67,12 @@ public actor ToolManager {
         let fm = FileManager.default
         return ToolKind.allCases.map { kind in
             switch kind {
-            case .galleryDL:
-                let state = galleryState()
-                let ready = fm.isExecutableFile(atPath: wrapper.path) && fm.isExecutableFile(atPath: pythonExe.path)
+            case .ytdlp, .galleryDL:
+                let state = pipState(kind)
+                let ready = fm.isExecutableFile(atPath: wrapper(kind).path) && fm.isExecutableFile(atPath: pythonExe.path)
                     && state != nil && state?.python == installer.currentVersion(.python)
                 // Durum dosyası yalnız sağlık kontrolü geçince yazılır.
-                return ToolStatus(kind: kind, installedVersion: state?.gallery, isReady: ready, verified: ready,
+                return ToolStatus(kind: kind, installedVersion: state?.version, isReady: ready, verified: ready,
                                   hasPrevious: ready && state?.previous != nil)
             default:
                 let v = installer.currentVersion(kind)
@@ -189,13 +190,13 @@ public actor ToolManager {
     }
 
     private func update(_ kind: ToolKind, progress: @escaping @Sendable (Double) -> Void) async throws -> Bool {
-        if kind == .galleryDL { return try await updateGalleryDL() }
+        if kind.isPip { return try await updatePip(kind) }
         let spec = try await kind.resolve(arch: arch, fetcher: installer.fetcher)
         if spec.version == skippedVersion(kind), installer.currentVersion(kind) != nil { return false }
         let carried = Carried()
         var extra: (@Sendable (URL) async throws -> Void)?
         if kind == .python {
-            extra = { @Sendable dir in carried.value = try await self.installGalleryDL(into: dir) }
+            extra = { @Sendable dir in carried.value = try await self.installPipTools(into: dir, keepExisting: false) }
         }
         guard try await installer.prepare(kind, spec: spec, progress: progress, extraCheck: extra) else { return false }
 
@@ -204,9 +205,8 @@ public actor ToolManager {
         let previous = installer.currentVersion(kind)
         try installer.commit(kind, version: spec.version)
         try? setSkipped(kind, nil)
-        if kind == .python, let g = carried.value {
-            try writeWrapper()
-            try writeGalleryState(python: spec.version, gallery: g)
+        if kind == .python, let installed = carried.value {
+            try writePipTools(installed, python: spec.version)
         }
         let verified = installer.isVerified(kind, version: spec.version) ? "doğrulandı" : "doğrulama kaydı yok"
         if let previous {
@@ -249,7 +249,7 @@ public actor ToolManager {
         await acquireWork()
         defer { releaseWork() }
         do {
-            if kind == .galleryDL { try await rollbackGalleryDL() } else { try await rollbackTool(kind) }
+            if kind.isPip { try await rollbackPip(kind) } else { try await rollbackTool(kind) }
         } catch {
             throw Self.userError(error)
         }
@@ -262,13 +262,8 @@ public actor ToolManager {
         let carried = Carried()
         var extra: (@Sendable (URL) async throws -> Void)?
         if kind == .python {
-            // Eski Python klasöründe o zamanki gallery-dl kurulu durur; çalıştığını doğrula.
-            extra = { @Sendable dir in
-                guard let v = await self.galleryVersion(python: dir.appendingPathComponent("bin/python3")) else {
-                    throw ToolError.healthCheckFailed("gallery-dl")
-                }
-                carried.value = v
-            }
+            // Eski Python klasöründe o zamanki araçlar kurulu durur; olmayan (ör. sonradan pip'e geçen yt-dlp) kurulur.
+            extra = { @Sendable dir in carried.value = try await self.installPipTools(into: dir, keepExisting: true) }
         }
         try await installer.check(kind, installer.kindDir(kind).appendingPathComponent(to), extra)
 
@@ -276,34 +271,33 @@ public actor ToolManager {
         defer { releaseSwap() }
         try installer.commit(kind, version: to)
         try setSkipped(kind, from)
-        if kind == .python, let g = carried.value {
-            try writeWrapper()
-            try writeGalleryState(python: to, gallery: g)
+        if kind == .python, let installed = carried.value {
+            try writePipTools(installed, python: to)
         }
         await log.append("\(kind.displayName) önceki sürüme döndü: \(from) → \(to)")
     }
 
-    private func rollbackGalleryDL() async throws {
-        guard let state = galleryState(), let target = state.previous, state.python == installer.currentVersion(.python) else {
+    private func rollbackPip(_ kind: ToolKind) async throws {
+        guard let state = pipState(kind), let target = state.previous, state.python == installer.currentVersion(.python) else {
             throw UserFacingError.noPreviousVersion
         }
         await acquireSwap()
         defer { releaseSwap() }
-        guard try await pip(["gallery-dl==\(target)"]), await galleryVersion() == target else {
-            _ = try? await pip(["gallery-dl==\(state.gallery)"])
-            throw ToolError.healthCheckFailed("gallery-dl")
+        guard try await pip(["\(kind.pipRequirement)==\(target)"]), await pipVersion(kind) == target else {
+            _ = try? await pip(["\(kind.pipRequirement)==\(state.version)"])
+            throw ToolError.healthCheckFailed(kind.pipPackage)
         }
-        try writeGalleryState(python: state.python, gallery: target, previous: state.gallery)
-        try setSkipped(.galleryDL, state.gallery)
-        await log.append("gallery-dl önceki sürüme döndü: \(state.gallery) → \(target)")
+        try writePipState(kind, python: state.python, version: target, previous: state.version)
+        try setSkipped(kind, state.version)
+        await log.append("\(kind.displayName) önceki sürüme döndü: \(state.version) → \(target)")
     }
 
-    // MARK: gallery-dl (taşınabilir Python'un site-packages'ine pip ile; her çağrı yalıtılmış)
+    // MARK: pip araçları (taşınabilir Python'un site-packages'ine; her çağrı yalıtılmış)
 
     private static let pythonEnv = ["PYTHONPATH": "", "PYTHONHOME": "", "PIP_DISABLE_PIP_VERSION_CHECK": "1"]
 
-    private func galleryVersion(python: URL? = nil) async -> String? {
-        guard let r = try? await installer.runner.run(python ?? pythonExe, ["-I", "-m", "gallery_dl", "--version"],
+    private func pipVersion(_ kind: ToolKind, python: URL? = nil) async -> String? {
+        guard let r = try? await installer.runner.run(python ?? pythonExe, ["-I", "-m", kind.pythonModule, "--version"],
                                                       environment: Self.pythonEnv, onLine: { _ in }),
               r.exitCode == 0 else { return nil }
         let v = r.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -327,45 +321,71 @@ public actor ToolManager {
             .contains { text.contains($0) }
     }
 
-    /// Yeni Python klasörüne, şu an kullanılan gallery-dl sürümünü (yoksa en yenisini) kurar ve çalıştığını doğrular.
-    private func installGalleryDL(into dir: URL) async throws -> String {
+    /// Verilen Python klasörüne pip araçlarını, şu an kullanılan sürümleriyle (yoksa en yenisiyle) kurar ve çalıştığını doğrular.
+    /// `keepExisting`: klasörde zaten çalışan sürüm varsa ona dokunmaz (geri dönmede o zamanki sürüm korunur).
+    private func installPipTools(into dir: URL, keepExisting: Bool) async throws -> [ToolKind: String] {
         let py = dir.appendingPathComponent("bin/python3")
-        let spec = await galleryVersion().map { "gallery-dl==\($0)" } ?? "gallery-dl"
-        guard try await pip([spec], python: py), let v = await galleryVersion(python: py) else {
-            throw ToolError.healthCheckFailed("gallery-dl")
+        var installed: [ToolKind: String] = [:]
+        for kind in ToolKind.pipTools {
+            if keepExisting, let v = await pipVersion(kind, python: py) { installed[kind] = v; continue }
+            let spec = await pipVersion(kind).map { "\(kind.pipRequirement)==\($0)" } ?? kind.pipRequirement
+            guard try await pip([spec], python: py), let v = await pipVersion(kind, python: py) else {
+                throw ToolError.healthCheckFailed(kind.pipPackage)
+            }
+            installed[kind] = v
         }
-        return v
+        return installed
     }
 
-    private func updateGalleryDL() async throws -> Bool {
+    private func writePipTools(_ installed: [ToolKind: String], python: String) throws {
+        for (kind, version) in installed {
+            try writeWrapper(kind)
+            try writePipState(kind, python: python, version: version)
+        }
+    }
+
+    private func updatePip(_ kind: ToolKind) async throws -> Bool {
         guard FileManager.default.isExecutableFile(atPath: pythonExe.path) else { throw ToolError.healthCheckFailed("python") }
         await acquireSwap()
         defer { releaseSwap() }
-        let previous = await galleryVersion()
+        let previous = await pipVersion(kind)
+        let req = kind.pipRequirement
         // Geri dönülen sürüm, daha yenisi çıkana kadar yeniden kurulmaz.
-        let installed = try await pip(["--upgrade", skippedVersion(.galleryDL).map { "gallery-dl!=\($0)" } ?? "gallery-dl"])
-        let now = installed ? await galleryVersion() : nil
+        let installed = try await pip(["--upgrade", skippedVersion(kind).map { "\(req)!=\($0)" } ?? req])
+        let now = installed ? await pipVersion(kind) : nil
         guard let now else {
-            if let previous { _ = try? await pip(["gallery-dl==\(previous)"]) }
-            throw ToolError.healthCheckFailed("gallery-dl")
+            if let previous { _ = try? await pip(["\(req)==\(previous)"]) }
+            throw ToolError.healthCheckFailed(kind.pipPackage)
         }
+        let wasReady = pipState(kind) != nil
         let changed = now != previous
-        try writeWrapper()
-        try writeGalleryState(python: installer.currentVersion(.python) ?? "", gallery: now, previous: changed ? previous : nil)
-        if changed {
-            try? setSkipped(.galleryDL, nil)
-            await log.append(previous.map { "gallery-dl \($0) → \(now) (sağlık kontrolü geçti)" } ?? "gallery-dl \(now) kuruldu (sağlık kontrolü geçti)")
+        try writeWrapper(kind)
+        try writePipState(kind, python: installer.currentVersion(.python) ?? "", version: now, previous: changed ? previous : nil)
+        if kind == .ytdlp { removeSingleFileYtdlp() }
+        if changed || !wasReady {
+            try? setSkipped(kind, nil)
+            let name = kind.displayName
+            await log.append(previous.map { $0 == now ? "\(name) \(now) kuruldu (sağlık kontrolü geçti)" : "\(name) \($0) → \(now) (sağlık kontrolü geçti)" }
+                             ?? "\(name) \(now) kuruldu (sağlık kontrolü geçti)")
         }
-        return changed
+        return changed || !wasReady
+    }
+
+    /// pip'e geçmeden önceki tek dosyalık yt-dlp sürümleri (~37 MB) artık kullanılmaz.
+    private func removeSingleFileYtdlp() {
+        let dir = installer.kindDir(.ytdlp), fm = FileManager.default
+        for name in (try? fm.contentsOfDirectory(atPath: dir.path)) ?? [] where name != "state" {
+            try? fm.removeItem(at: dir.appendingPathComponent(name))
+        }
     }
 
     /// pip'in ürettiği betiklerin shebang'i mutlak yola bağlıdır; sürüm klasörü değişince bozulmaması için sabit bir sarmalayıcı kullanılır.
-    private func writeWrapper() throws {
-        let fm = FileManager.default
-        try fm.createDirectory(at: wrapper.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let script = "#!/bin/sh\nexec \"\(pythonExe.path)\" -I -m gallery_dl \"$@\"\n"
-        try script.write(to: wrapper, atomically: true, encoding: .utf8)
-        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: wrapper.path)
+    private func writeWrapper(_ kind: ToolKind) throws {
+        let fm = FileManager.default, file = wrapper(kind)
+        try fm.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let script = "#!/bin/sh\nexec \"\(pythonExe.path)\" -I -m \(kind.pythonModule) \"$@\"\n"
+        try script.write(to: file, atomically: true, encoding: .utf8)
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
     }
 
     private static let offlineCodes: Set<URLError.Code> = [
@@ -386,8 +406,8 @@ public actor ToolManager {
 
 private final class Carried: @unchecked Sendable {
     private let lock = NSLock()
-    private var _value: String?
-    var value: String? {
+    private var _value: [ToolKind: String]?
+    var value: [ToolKind: String]? {
         get { lock.withLock { _value } }
         set { lock.withLock { _value = newValue } }
     }

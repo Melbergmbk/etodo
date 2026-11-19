@@ -129,7 +129,7 @@ Etodo aşağıdaki ücretsiz, açık kaynaklı yazılımları kullanır; her bir
 | [gallery-dl](https://github.com/mikf/gallery-dl) | Fotoğraf ve galeri indirme | GPL-2.0 |
 | [FFmpeg](https://ffmpeg.org) | Görüntü ve sesi birleştirme, dönüştürme | GPL |
 | [Deno](https://deno.com) | YouTube bağlantılarını çözme | MIT |
-| [Python](https://www.python.org) | gallery-dl'nin çalışma ortamı | PSF |
+| [Python](https://www.python.org) | yt-dlp ve gallery-dl'nin çalışma ortamı | PSF |
 | [Sparkle](https://sparkle-project.org) | Uygulama güncellemeleri (uygulamanın içinde) | MIT |
 
 ---

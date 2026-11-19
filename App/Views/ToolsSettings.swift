@@ -53,7 +53,7 @@ struct ToolsSettings: View {
 
     static func rollbackMessage(_ kind: ToolKind) -> String {
         let common = "Şu anki sürüm, daha yenisi çıkana kadar tekrar kurulmaz. Süren bir indirme varsa bitmesi beklenir."
-        return kind == .galleryDL ? "Önceki sürüm yeniden indirilir (internet gerekir). " + common : common
+        return kind.isPip ? "Önceki sürüm yeniden indirilir (internet gerekir). " + common : common
     }
 
     private var footer: some View {
@@ -222,7 +222,7 @@ private struct ToolRow: View {
                     .foregroundStyle(.secondary)
                 if status.installedVersion == nil {
                     Text("Kurulu değil").foregroundStyle(.orange)
-                } else if status.kind == .galleryDL {
+                } else if status.kind.isPip {
                     Check("Sağlık kontrolü", ok: status.verified)
                 } else {
                     Check(status.verified ? "SHA-256 doğrulandı" : "Doğrulama kaydı yok", ok: status.verified)

@@ -114,9 +114,9 @@ private struct PrivacySettings: View {
         Form {
             Section("Uygulamanın bağlandığı yerler") {
                 Place(symbol: "arrow.triangle.2.circlepath", title: "GitHub",
-                      text: "Uygulama güncellemeleri ve yt-dlp, Python, deno indirmeleri")
+                      text: "Uygulama güncellemeleri ve Python, deno indirmeleri")
                 Place(symbol: "film", title: "ffmpeg.martin-riedl.de", text: "ffmpeg ve ffprobe indirmesi")
-                Place(symbol: "shippingbox", title: "PyPI (pypi.org)", text: "gallery-dl kurulumu ve güncellemesi")
+                Place(symbol: "shippingbox", title: "PyPI (pypi.org)", text: "yt-dlp ve gallery-dl kurulumu ve güncellemesi")
                 Place(symbol: "globe", title: "İndirdiğin siteler",
                       text: "YouTube, Instagram ve yapıştırdığın diğer bağlantılar")
             }

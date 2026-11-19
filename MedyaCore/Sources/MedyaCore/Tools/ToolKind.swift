@@ -1,7 +1,8 @@
 import Foundation
 
 public enum ToolKind: String, CaseIterable, Sendable {
-    case ytdlp, python, galleryDL, ffmpeg, deno
+    // Sıra kurulum sırasıdır: pip araçları Python'dan sonra gelmeli.
+    case python, ytdlp, galleryDL, ffmpeg, deno
 
     public var displayName: String {
         switch self {
@@ -16,13 +17,24 @@ public enum ToolKind: String, CaseIterable, Sendable {
     /// Aracın indirildiği yer (kısa, kullanıcıya gösterilir).
     public var source: String {
         switch self {
-        case .ytdlp: "github.com/yt-dlp"
+        case .ytdlp: "PyPI (pip)"
         case .python: "github.com/astral-sh"
         case .galleryDL: "PyPI (pip)"
         case .ffmpeg: "ffmpeg.martin-riedl.de"
         case .deno: "github.com/denoland"
         }
     }
+}
+
+extension ToolKind {
+    /// Taşınabilir Python'a pip ile kurulan araçlar (tek dosyalık sürüm her açılışta saniyelerce açılıyordu).
+    public var isPip: Bool { self == .ytdlp || self == .galleryDL }
+
+    var pipPackage: String { self == .ytdlp ? "yt-dlp" : "gallery-dl" }
+    /// Ek bileşenler: yt-dlp için şifre çözme, sıkıştırma, site korumalarını aşma vb.
+    var pipRequirement: String { self == .ytdlp ? "yt-dlp[default,curl-cffi]" : pipPackage }
+    var pythonModule: String { self == .ytdlp ? "yt_dlp" : "gallery_dl" }
+    static let pipTools: [ToolKind] = allCases.filter(\.isPip)
 }
 
 public struct ToolStatus: Sendable, Equatable {
@@ -54,7 +66,6 @@ enum Checksum: Sendable {
 }
 
 enum Unpack: Sendable {
-    case copy(as: String)
     /// install_only arşivinin tek üst klasörü `python/`
     case tarGzPython
     case zip
@@ -91,11 +102,10 @@ extension ToolKind {
     /// Kurulumdan sonra imzalanacak ve sağlık kontrolü yapılacak yürütülebilirler (sürüm klasörüne göre).
     var executables: [String] {
         switch self {
-        case .ytdlp: ["yt-dlp"]
         case .python: ["bin/python3"]
         case .ffmpeg: ["ffmpeg", "ffprobe"]
         case .deno: ["deno"]
-        case .galleryDL: []
+        case .ytdlp, .galleryDL: []
         }
     }
 
@@ -119,7 +129,7 @@ extension ToolKind {
         v.range(of: #"^[A-Za-z0-9][A-Za-z0-9._+-]*$"#, options: .regularExpression) != nil && v != "current"
     }
 
-    /// `.galleryDL` için çağrılmaz (pip ile kurulur).
+    /// pip araçları için çağrılmaz.
     func resolve(arch: String, fetcher: HTTPFetching) async throws -> ReleaseSpec {
         let spec = try await fetchSpec(arch: arch, fetcher: fetcher)
         guard Self.isSafeVersion(spec.version) else { throw ToolError.unsafeRelease(spec.version) }
@@ -129,11 +139,6 @@ extension ToolKind {
     private func fetchSpec(arch: String, fetcher: HTTPFetching) async throws -> ReleaseSpec {
         let gh = arch == "arm64" ? "aarch64" : "x86_64"
         switch self {
-        case .ytdlp:
-            let r = try await Self.github("yt-dlp/yt-dlp", fetcher: fetcher)
-            let bin = try Self.asset(r, "yt-dlp_macos"), sums = try Self.asset(r, "SHA2-256SUMS")
-            return ReleaseSpec(version: r.tag_name, artifacts: [
-                Artifact(url: bin.browser_download_url, checksum: .sums(sums.browser_download_url, entry: bin.name), unpack: .copy(as: "yt-dlp"))])
         case .python:
             let r = try await Self.github("astral-sh/python-build-standalone", fetcher: fetcher)
             let pattern = #"^cpython-(3\.12\.\d+\+\d+)-\#(gh)-apple-darwin-install_only\.tar\.gz$"#
@@ -162,8 +167,8 @@ extension ToolKind {
                 return Artifact(url: u, checksum: .single(u.appendingPathExtension("sha256")), unpack: .zip)
             }
             return ReleaseSpec(version: version, artifacts: [artifact("ffmpeg"), artifact("ffprobe")])
-        case .galleryDL:
-            throw ToolError.assetNotFound("galleryDL")
+        case .ytdlp, .galleryDL:
+            throw ToolError.assetNotFound(rawValue)
         }
     }
 }

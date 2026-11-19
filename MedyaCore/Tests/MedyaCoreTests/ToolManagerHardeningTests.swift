@@ -54,7 +54,6 @@ final class Flag: @unchecked Sendable {
 }
 
 @Suite struct ToolManagerHardeningTests {
-    static let ytApi = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
     static let pyApi = "https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest"
     static let denoApi = "https://api.github.com/repos/denoland/deno/releases/latest"
 
@@ -81,20 +80,6 @@ final class Flag: @unchecked Sendable {
         try? FileManager.default.destinationOfSymbolicLink(atPath: root.appendingPathComponent("tools/\(kind)/current").path)
     }
 
-    func publishYtdlp(_ f: FakeFetcher, version: String) {
-        let bin = Data("binary-\(version)".utf8)
-        f.set(Self.ytApi, """
-        {"tag_name":"\(version)","assets":[
-         {"name":"yt-dlp_macos","browser_download_url":"https://dl.test/\(version)/yt-dlp_macos"},
-         {"name":"SHA2-256SUMS","browser_download_url":"https://dl.test/\(version)/SHA2-256SUMS"}]}
-        """)
-        f.set("https://dl.test/\(version)/yt-dlp_macos", bin)
-        f.set("https://dl.test/\(version)/SHA2-256SUMS", "\(sha(bin))  yt-dlp_macos\n")
-    }
-    let okRunner: @Sendable () -> FakeRunner = {
-        FakeRunner([.init(matches: { u, a in u.lastPathComponent == "yt-dlp" && a == ["--version"] },
-                          result: ProcessResult(exitCode: 0, stdout: "ok", stderr: ""))])
-    }
 
     func publishPython(_ f: FakeFetcher, version: String) throws {
         let work = try tempRoot()
@@ -145,6 +130,8 @@ final class Flag: @unchecked Sendable {
         #expect(current(root, "python") == v2)
         let pip = r.calls.last { $0.0.path.contains(v2) && $0.1.contains("pip") }
         #expect(pip?.1.contains("gallery-dl==1.0.0") == true)
+        #expect(r.calls.contains { $0.0.path.contains(v2) && $0.1.contains("yt-dlp[default,curl-cffi]==ok") })
+        #expect(await m.status().first { $0.kind == .ytdlp }?.isReady == true)
         #expect(pip?.1.contains("-I") == true)
         let g = await m.status().first { $0.kind == .galleryDL }
         #expect(g?.isReady == true)
@@ -187,45 +174,45 @@ final class Flag: @unchecked Sendable {
 
     @Test func downloadStartingRightAfterEndPreventsSwap() async throws {
         let root = try tempRoot(), f = FakeFetcher()
-        publishYtdlp(f, version: "v1")
-        let m = manager(root, f, okRunner())
+        DenoRelease.publish(f, version: "v1")
+        let m = manager(root, f, DenoRelease.runner())
         _ = await m.updateAll()
-        publishYtdlp(f, version: "v2")
+        DenoRelease.publish(f, version: "v2")
         await m.beginDownload()
         let task = Task { await m.updateAll() }
-        for _ in 0..<100 where !f.requested.contains(URL(string: "https://dl.test/v2/yt-dlp_macos")!) {
+        for _ in 0..<100 where !f.requested.contains(URL(string: DenoRelease.url("v2"))!) {
             try await Task.sleep(for: .milliseconds(20))
         }
         try await Task.sleep(for: .milliseconds(100))
         await m.endDownloadThenBeginForTest()
         try await Task.sleep(for: .milliseconds(150))
-        #expect(current(root, "ytdlp") == "v1")
+        #expect(current(root, "deno") == "v1")
         await m.endDownload()
-        #expect(await task.value.contains(.ytdlp))
-        #expect(current(root, "ytdlp") == "v2")
+        #expect(await task.value.contains(.deno))
+        #expect(current(root, "deno") == "v2")
     }
 
     // I3
     @Test func concurrentUpdateAllRunsOnce() async throws {
         let root = try tempRoot(), f = FakeFetcher()
-        publishYtdlp(f, version: "v1")
-        let m = manager(root, f, okRunner())
+        DenoRelease.publish(f, version: "v1")
+        let m = manager(root, f, DenoRelease.runner())
         async let a = m.updateAll()
         async let b = m.updateAll()
         _ = await (a, b)
-        #expect(f.requested.filter { $0.absoluteString == Self.ytApi }.count == 1)
+        #expect(f.requested.filter { $0.absoluteString == DenoRelease.api }.count == 1)
     }
 
     // I4
     @Test(arguments: ["..", "a/b", "current", ".", ".hidden"])
     func unsafeVersionIsRejected(_ tag: String) async throws {
         let f = FakeFetcher()
-        f.set(Self.ytApi, """
+        f.set(DenoRelease.api, """
         {"tag_name":"\(tag)","assets":[
-         {"name":"yt-dlp_macos","browser_download_url":"https://dl.test/x/yt-dlp_macos"},
-         {"name":"SHA2-256SUMS","browser_download_url":"https://dl.test/x/SHA2-256SUMS"}]}
+         {"name":"deno-aarch64-apple-darwin.zip","browser_download_url":"https://dl.test/x/deno.zip"},
+         {"name":"deno-aarch64-apple-darwin.zip.sha256sum","browser_download_url":"https://dl.test/x/deno.zip.sha256sum"}]}
         """)
-        await #expect(throws: ToolError.self) { _ = try await ToolKind.ytdlp.resolve(arch: "arm64", fetcher: f) }
+        await #expect(throws: ToolError.self) { _ = try await ToolKind.deno.resolve(arch: "arm64", fetcher: f) }
     }
 
     @Test func ffmpegForeignHostIsRejected() async throws {
@@ -237,8 +224,11 @@ final class Flag: @unchecked Sendable {
 
     @Test func unsafeVersionMapsToNeedsToolUpdate() async throws {
         let root = try tempRoot(), f = FakeFetcher()
-        publishYtdlp(f, version: "..")
-        let m = manager(root, f, okRunner())
+        // Python ve pip araçları kurulur; sıradaki ffmpeg yabancı adrese yönlenir.
+        try publishPython(f, version: v1)
+        f.redirect("https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/release/ffmpeg.zip",
+                   to: "https://evil.example.com/download/macos/arm64/123_9.0/ffmpeg.zip")
+        let m = manager(root, f, pyRunner())
         do { try await m.installMissing { _, _ in }; Issue.record("hata bekleniyordu") }
         catch { #expect(error == .needsToolUpdate) }
     }
@@ -278,16 +268,16 @@ final class Flag: @unchecked Sendable {
     // I6
     @Test func rollingBackToKeptPreviousVersionSurvives() async throws {
         let root = try tempRoot(), f = FakeFetcher()
-        let m = manager(root, f, okRunner())
-        publishYtdlp(f, version: "v1"); _ = await m.updateAll()
-        publishYtdlp(f, version: "v2"); _ = await m.updateAll()
-        let marker = root.appendingPathComponent("tools/ytdlp/v1/marker")
+        let m = manager(root, f, DenoRelease.runner())
+        DenoRelease.publish(f, version: "v1"); _ = await m.updateAll()
+        DenoRelease.publish(f, version: "v2"); _ = await m.updateAll()
+        let marker = root.appendingPathComponent("tools/deno/v1/marker")
         try Data("m".utf8).write(to: marker)
-        publishYtdlp(f, version: "v1")
-        #expect(await m.updateAll().contains(.ytdlp))
-        #expect(current(root, "ytdlp") == "v1")
+        DenoRelease.publish(f, version: "v1")
+        #expect(await m.updateAll().contains(.deno))
+        #expect(current(root, "deno") == "v1")
         #expect(FileManager.default.fileExists(atPath: marker.path))
-        #expect(dirs(root, "ytdlp") == ["v1", "v2"])
+        #expect(dirs(root, "deno") == ["v1", "v2"])
     }
 
     // gallery-dl geri alma: sarmalayıcı ve durum dosyası değişmez
