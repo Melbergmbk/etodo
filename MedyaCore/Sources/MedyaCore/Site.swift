@@ -1,6 +1,6 @@
 import Foundation
 
-public enum Site: String, CaseIterable, Sendable {
+public enum Site: String, CaseIterable, Sendable, Codable {
     case youtube, instagram, other
 
     public static func detect(_ raw: String) -> Site? {

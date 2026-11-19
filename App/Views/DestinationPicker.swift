@@ -22,7 +22,6 @@ struct DestinationPicker: View {
             .fixedSize()
             .help(FolderLayout.root(in: model.destination).path)
         }
-        .disabled(model.isBusy)
     }
 
     /// Kayıt yeri ayarı üst klasördür; kullanıcıya dosyaların gerçekte gittiği Etodo klasörü gösterilir.

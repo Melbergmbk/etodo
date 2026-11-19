@@ -11,7 +11,7 @@ struct MainView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SiteTabs(selection: model.site, isDisabled: model.isBusy) { site in
+            SiteTabs(selection: model.site, isDisabled: false) { site in
                 model.select(site)
                 linkFocused = true
             }
@@ -25,7 +25,7 @@ struct MainView: View {
                     .padding(.top, 14)
                     .transition(.opacity)
             } else {
-                LinkField(text: $model.link, focus: $linkFocused, isDisabled: model.isBusy)
+                LinkField(text: $model.link, focus: $linkFocused, isDisabled: false)
                     .padding(.top, 18)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -37,11 +37,19 @@ struct MainView: View {
             }
 
             previewSection
+
+            if !model.queue.isEmpty || !model.history.isEmpty {
+                DownloadsList(model: model)
+                    .padding(.top, 20)
+                    .transition(.opacity)
+            }
         }
         .background(pasteShortcut)
         .animation(motion, value: model.site)
         .animation(motion, value: model.preview)
         .animation(motion, value: model.error)
+        .animation(motion, value: model.queue)
+        .animation(motion, value: model.history)
         .onAppear { if model.site != nil { linkFocused = true } }
     }
 
@@ -83,7 +91,7 @@ struct MainView: View {
     /// Link kutusu odakta değilken ⌘V linki yine kutuya yapıştırır; odaktayken sistemin kendi yapıştırması çalışır.
     @ViewBuilder
     private var pasteShortcut: some View {
-        if !linkFocused && !model.isBusy {
+        if !linkFocused {
             Button("Yapıştır") {
                 model.pasteFromClipboard()
                 linkFocused = true

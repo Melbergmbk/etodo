@@ -67,7 +67,6 @@ private struct GeneralSettings: View {
                             .help(FolderLayout.root(in: model.destination).path)
                         Button("Değiştir…") { model.chooseOtherFolder() }
                             .controlSize(.small)
-                            .disabled(model.isBusy)
                     }
                 }
             }
@@ -126,8 +125,8 @@ private struct PrivacySettings: View {
                       text: "Giriş gereken bağlantılarda tarayıcı çerezlerin yalnızca bu Mac'te, indirme için okunur.")
                 Place(symbol: "chart.bar.xaxis", title: "Analitik ve takip yok",
                       text: "Hesap, sunucu ya da kullanım istatistiği yok.")
-                Place(symbol: "list.bullet.rectangle", title: "Linkler kaydedilmez",
-                      text: "İşlem kaydında yalnızca araç sürümleri ve indirilen dosyaların adları tutulur.")
+                Place(symbol: "list.bullet.rectangle", title: "İndirme geçmişi yalnız bu Mac'te",
+                      text: "Son 20 indirmenin adı ve linki \"Tekrar indir\" için saklanır; \"Bitenleri temizle\" ile silinir. Hiçbir yere gönderilmez.")
             }
         }
         .formStyle(.grouped)

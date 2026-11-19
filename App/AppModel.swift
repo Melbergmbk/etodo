@@ -34,7 +34,24 @@ enum DownloadPhase: Equatable {
     case downloading(fraction: Double, bytesPerSecond: Double?, eta: TimeInterval?)
     /// İkinci akış (ses), birleştirme ya da MP3 dönüştürme: yüzde gerileyip kafa karıştırmasın diye belirsiz gösterilir.
     case finishing
-    case done([URL])
+}
+
+/// İndirmeler listesindeki bekleyen, süren ya da olmayan iş. Bitenler `DownloadRecord` olarak geçmişe geçer.
+struct QueueItem: Identifiable, Equatable {
+    enum State: Equatable {
+        case queued, running
+        case failed(ShownError)
+    }
+    let id = UUID()
+    var title: String
+    var detail: String
+    var link: String
+    var request: DownloadRequest
+    var state: State
+
+    static func == (a: QueueItem, b: QueueItem) -> Bool {
+        a.id == b.id && a.state == b.state && a.title == b.title
+    }
 }
 
 struct ShownError: Equatable {
@@ -57,6 +74,7 @@ final class AppModel {
     static let heightKey = "lastVideoHeight"
     static let audioKey = "lastAudioKbps"
     static let subtitlesKey = "subtitles"
+    static let historyKey = "downloadHistory"
 
     private(set) var disclaimerAccepted: Bool
     private(set) var toolsState: ToolsState = .checking
@@ -82,23 +100,25 @@ final class AppModel {
     private(set) var preview: PreviewState = .empty
     /// Biçim ve kalite seçimleri hatırlanır; haftada bir MP3 indiren her seferinde yeniden seçmesin.
     var formatKind: FormatKind = .video {
-        didSet { resetFinished(); defaults.set(formatKind == .audio ? "audio" : "video", forKey: Self.formatKey) }
+        didSet { defaults.set(formatKind == .audio ? "audio" : "video", forKey: Self.formatKey) }
     }
     var videoHeight: Int? {
         didSet {
-            resetFinished()
             if !applyingPreferredHeight, let videoHeight { defaults.set(videoHeight, forKey: Self.heightKey) }
         }
     }
     var subtitles = false {
-        didSet { resetFinished(); defaults.set(subtitles, forKey: Self.subtitlesKey) }
+        didSet { defaults.set(subtitles, forKey: Self.subtitlesKey) }
     }
     var audioKbps = 192 {
-        didSet { resetFinished(); defaults.set(audioKbps, forKey: Self.audioKey) }
+        didSet { defaults.set(audioKbps, forKey: Self.audioKey) }
     }
     private(set) var destination: URL
     private(set) var recentFolders: [URL]
+    /// Süren indirmenin ilerlemesi (listede o satırda gösterilir).
     private(set) var phase: DownloadPhase = .idle
+    private(set) var queue: [QueueItem] = []
+    private(set) var history: [DownloadRecord]
     var error: ShownError?
 
     @ObservationIgnored private var tools: ToolManager?
@@ -124,6 +144,7 @@ final class AppModel {
         destination = FolderLayout.parentFolder(stored: defaults.string(forKey: "destination") ?? old?.string(forKey: "destination"),
                                                 fallback: fallback)
         disclaimerAccepted = defaults.bool(forKey: Self.disclaimerKey)
+        history = DownloadHistory.decode(defaults.data(forKey: Self.historyKey))
         formatKind = defaults.string(forKey: Self.formatKey) == "audio" ? .audio : .video
         subtitles = defaults.bool(forKey: Self.subtitlesKey)
         let savedKbps = defaults.integer(forKey: Self.audioKey)
@@ -153,15 +174,15 @@ final class AppModel {
 
     // MARK: Türetilmiş durum
 
+    /// Süren ya da sırada bekleyen indirme var mı (çıkışta uyarı için).
     var isBusy: Bool {
-        switch phase {
-        case .starting, .downloading, .finishing: true
-        default: false
-        }
+        queue.contains { $0.state == .queued || $0.state == .running }
     }
 
+    var isDownloading: Bool { queue.contains { $0.state == .running } }
+
     var canDownload: Bool {
-        guard toolsState == .ready, !isBusy else { return false }
+        guard toolsState == .ready else { return false }
         switch preview {
         case .media, .gallery: return true
         default: return false
@@ -316,7 +337,6 @@ final class AppModel {
     private func linkChanged() {
         fetchTask?.cancel()
         error = nil
-        phase = .idle
         guard let url = Site.normalizedURL(link), let detected = Site.detect(link) else {
             preview = .empty
             return
@@ -355,27 +375,80 @@ final class AppModel {
         }
     }
 
-    // MARK: İndirme
+    // MARK: İndirme ve sıra
 
+    /// Seçili linki sıraya ekler ve formu boşaltır; yenisi hemen yapıştırılabilir.
     func startDownload() {
-        guard canDownload, let downloader, let site, let url = Site.normalizedURL(link) else { return }
+        guard canDownload, let site, let url = Site.normalizedURL(link) else { return }
         var request = makeRequest(url, site, format: selectedFormat)
         request.subtitles = subtitles && offersSubtitles
+        let title: String
+        if case .media(let info) = preview, !info.title.isEmpty { title = info.title } else { title = url.host() ?? link }
+        queue.append(QueueItem(title: title, detail: Self.detail(for: request.format, original: qualityIsOriginal),
+                               link: url.absoluteString, request: request, state: .queued))
         error = nil
-        phase = .starting
         DoneNotifier.requestPermission()
-        downloadTask = Task { [weak self] in
-            await self?.perform(request, with: downloader)
+        link = ""
+        startNext()
+    }
+
+    func cancel(_ id: QueueItem.ID) {
+        guard let item = queue.first(where: { $0.id == id }) else { return }
+        if item.state == .running {
+            downloadTask?.cancel()
+        } else {
+            queue.removeAll { $0.id == id }
         }
     }
 
-    func cancelDownload() {
-        downloadTask?.cancel()
+    func retry(_ id: QueueItem.ID) {
+        guard let i = queue.firstIndex(where: { $0.id == id }) else { return }
+        if case .failed(let shown) = queue[i].state, error == shown { error = nil }
+        queue[i].state = .queued
+        startNext()
     }
 
-    func revealInFinder() {
-        guard case .done(let files) = phase else { return }
-        NSWorkspace.shared.activateFileViewerSelecting(files)
+    func showError(_ id: QueueItem.ID) {
+        if case .failed(let shown)? = queue.first(where: { $0.id == id })?.state { error = shown }
+    }
+
+    /// Geçmişteki bir indirmeyi aynı biçimle yeniden sıraya ekler (tarayıcı ve kayıt yeri bugünkü ayarlardan).
+    func downloadAgain(_ record: DownloadRecord) {
+        guard toolsState == .ready, let url = URL(string: record.link) else { return }
+        var request = makeRequest(url, record.site, format: record.format)
+        request.subtitles = record.subtitles
+        queue.append(QueueItem(title: record.title, detail: record.detail, link: record.link, request: request, state: .queued))
+        startNext()
+    }
+
+    func reveal(_ record: DownloadRecord) {
+        let existing = record.files.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) }
+        if existing.isEmpty {
+            showToast("Dosya taşınmış ya da silinmiş.")
+        } else {
+            NSWorkspace.shared.activateFileViewerSelecting(existing)
+        }
+    }
+
+    /// Bitenleri ve olmayanları listeden kaldırır; dosyalara dokunmaz.
+    func clearFinished() {
+        queue.removeAll { if case .failed = $0.state { true } else { false } }
+        history = []
+        defaults.removeObject(forKey: Self.historyKey)
+    }
+
+    var hasFinished: Bool {
+        !history.isEmpty || queue.contains { if case .failed = $0.state { true } else { false } }
+    }
+
+    private func startNext() {
+        guard !isDownloading, let downloader, let i = queue.firstIndex(where: { $0.state == .queued }) else { return }
+        queue[i].state = .running
+        phase = .starting
+        let item = queue[i]
+        downloadTask = Task { [weak self] in
+            await self?.perform(item, with: downloader)
+        }
     }
 
     private var selectedFormat: MediaFormat {
@@ -383,27 +456,47 @@ final class AppModel {
         return formatKind == .audio ? .audio(kbps: audioKbps) : .video(maxHeight: videoHeight)
     }
 
-    private func perform(_ request: DownloadRequest, with downloader: Downloader) async {
+    static func detail(for format: MediaFormat, original: Bool) -> String {
+        switch format {
+        case .images: "Fotoğraflar"
+        case .audio(let kbps): "MP3 · \(kbps) kbps"
+        case .video(let h): original ? "Orijinal kalite" : h.map { FormatPicker.label(for: $0) } ?? "En iyi kalite"
+        }
+    }
+
+    private func perform(_ item: QueueItem, with downloader: Downloader) async {
         let (stream, continuation) = AsyncStream.makeStream(of: DownloadProgress.self, bufferingPolicy: .bufferingNewest(8))
         let consumer = Task { @MainActor [weak self] in
             for await p in stream { self?.apply(p) }
         }
         do throws(UserFacingError) {
             let files = try await usingTools { () async throws(UserFacingError) -> [URL] in
-                try await downloader.download(request) { continuation.yield($0) }
+                try await downloader.download(item.request) { continuation.yield($0) }
             }
             continuation.finish()
             await consumer.value
-            phase = .done(files)
+            queue.removeAll { $0.id == item.id }
+            history = DownloadHistory.adding(
+                DownloadRecord(title: item.title, detail: item.detail, link: item.link, site: item.request.site,
+                               format: item.request.format, subtitles: item.request.subtitles, files: files.map(\.path)),
+                to: history)
+            defaults.set(DownloadHistory.encode(history), forKey: Self.historyKey)
             DoneNotifier.notify(files)
-            remember(request.destination)
+            remember(item.request.destination)
             await logDownload(files)
         } catch {
             continuation.finish()
             consumer.cancel()
-            phase = .idle
-            show(error, details: await downloader.lastErrorOutput)
+            if error == .cancelled {
+                queue.removeAll { $0.id == item.id }
+            } else {
+                let shown = ShownError(error: error, details: await downloader.lastErrorOutput)
+                if let i = queue.firstIndex(where: { $0.id == item.id }) { queue[i].state = .failed(shown) }
+                show(error, details: shown.details)
+            }
         }
+        phase = .idle
+        startNext()
     }
 
     private func apply(_ p: DownloadProgress) {
@@ -484,13 +577,11 @@ final class AppModel {
     // MARK: Kayıt yeri
 
     func choose(_ picked: URL) {
-        guard !isBusy else { return }
         // Etodo klasörünün kendisi seçildiyse iç içe Etodo/Etodo oluşmasın
         let folder = FolderLayout.parentFolder(stored: picked.path, fallback: destination)
         destination = folder
         defaults.set(folder.path, forKey: "destination")
         remember(folder)
-        resetFinished()
     }
 
     func chooseOtherFolder() {
@@ -538,10 +629,6 @@ final class AppModel {
 
     private func makeRequest(_ url: URL, _ site: Site, format: MediaFormat) -> DownloadRequest {
         DownloadRequest(url: url, site: site, format: format, destination: destination, browser: browser)
-    }
-
-    private func resetFinished() {
-        if case .done = phase { phase = .idle }
     }
 
     private func show(_ error: UserFacingError, details: String) {

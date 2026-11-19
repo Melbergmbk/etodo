@@ -31,7 +31,6 @@ struct FormatPicker: View {
                     .padding(.leading, 70)
             }
         }
-        .disabled(model.isBusy)
     }
 
     @ViewBuilder

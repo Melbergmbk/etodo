@@ -22,7 +22,7 @@ public enum Browser: String, CaseIterable, Sendable {
     }
 }
 
-public enum MediaFormat: Hashable, Sendable {
+public enum MediaFormat: Hashable, Sendable, Codable {
     case video(maxHeight: Int?)
     case audio(kbps: Int)
     case images
