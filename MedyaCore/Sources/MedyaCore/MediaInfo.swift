@@ -44,6 +44,16 @@ public struct MediaInfo: Sendable, Equatable {
         return videoBytes + (audio?.bytes ?? 0)
     }
 
+    /// Seçilecek görüntü akışı QuickTime'ın açabildiği H.264/HEVC mi? 1440p ve 4K YouTube genelde VP9/AV1'dir.
+    /// Codec bilinmiyorsa (akış bilgisi yok) uyarı gösterilmesin diye true döner.
+    public func opensInQuickTime(maxHeight: Int?) -> Bool {
+        let videos = streams.filter { ($0.height ?? 0) > 0 && $0.vcodec != "none" && $0.height! <= (maxHeight ?? .max) }
+        guard let top = videos.map({ $0.height! }).max(),
+              let video = Self.pick(videos.filter { $0.height == top }, preferring: { $0.vcodec?.hasPrefix("avc1") == true }),
+              let codec = video.vcodec?.lowercased() else { return true }
+        return ["avc", "h264", "hvc", "hev", "h265"].contains { codec.hasPrefix($0) }
+    }
+
     /// Kalite adı kısa kenara göre: dikey 1080×1920 bir Short "1920p" değil "1080p" görünür.
     public func qualityName(forHeight h: Int) -> Int {
         let widths = streams.filter { $0.height == h }.compactMap(\.width)

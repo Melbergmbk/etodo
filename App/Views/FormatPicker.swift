@@ -15,6 +15,21 @@ struct FormatPicker: View {
             OptionRow(label: "Kalite") {
                 quality
             }
+            if model.offersSubtitles {
+                OptionRow(label: "Altyazı") {
+                    Toggle("Türkçe ya da İngilizce altyazı ekle (varsa)", isOn: $model.subtitles)
+                        .toggleStyle(.checkbox)
+                        .font(.system(size: 12))
+                }
+            }
+            if showsQuickTimeNote {
+                Label("Bu kalite Mac'in QuickTime oynatıcısında açılmaz; IINA ya da VLC ile açılır. Her yerde açılması için 1080p seç.",
+                      systemImage: "info.circle")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 70)
+            }
         }
         .disabled(model.isBusy)
     }
@@ -42,6 +57,11 @@ struct FormatPicker: View {
             .labelsHidden()
             .fixedSize()
         }
+    }
+
+    private var showsQuickTimeNote: Bool {
+        guard model.formatKind == .video, !model.qualityIsOriginal, let info else { return false }
+        return !info.opensInQuickTime(maxHeight: model.videoHeight)
     }
 
     private var info: MediaInfo? {

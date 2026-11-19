@@ -56,6 +56,7 @@ final class AppModel {
     static let formatKey = "lastFormat"
     static let heightKey = "lastVideoHeight"
     static let audioKey = "lastAudioKbps"
+    static let subtitlesKey = "subtitles"
 
     private(set) var disclaimerAccepted: Bool
     private(set) var toolsState: ToolsState = .checking
@@ -89,6 +90,9 @@ final class AppModel {
             if !applyingPreferredHeight, let videoHeight { defaults.set(videoHeight, forKey: Self.heightKey) }
         }
     }
+    var subtitles = false {
+        didSet { resetFinished(); defaults.set(subtitles, forKey: Self.subtitlesKey) }
+    }
     var audioKbps = 192 {
         didSet { resetFinished(); defaults.set(audioKbps, forKey: Self.audioKey) }
     }
@@ -121,6 +125,7 @@ final class AppModel {
                                                 fallback: fallback)
         disclaimerAccepted = defaults.bool(forKey: Self.disclaimerKey)
         formatKind = defaults.string(forKey: Self.formatKey) == "audio" ? .audio : .video
+        subtitles = defaults.bool(forKey: Self.subtitlesKey)
         let savedKbps = defaults.integer(forKey: Self.audioKey)
         audioKbps = Self.audioRates.contains(savedKbps) ? savedKbps : 192
         browser = Browser(rawValue: defaults.string(forKey: Self.browserKey) ?? "") ?? Self.systemDefaultBrowser()
@@ -168,6 +173,12 @@ final class AppModel {
         guard site == .instagram, formatKind == .video,
               let url = URL(string: link.trimmingCharacters(in: .whitespacesAndNewlines)) else { return false }
         return url.pathComponents.dropFirst().first?.lowercased() == "p"
+    }
+
+    /// Altyazı seçeneği yalnız YouTube videolarında gösterilir.
+    var offersSubtitles: Bool {
+        guard site == .youtube, formatKind == .video, case .media = preview else { return false }
+        return true
     }
 
     var qualityOptions: [Int] {
@@ -226,7 +237,8 @@ final class AppModel {
         error = nil
         toolsState = .ready
         await refreshToolInfo()
-        if missing.isEmpty {
+        // Açılışta yalnız 2 günde bir bakılır; bir site bozulursa indirme hatası zaten güncellemeyi tetikler.
+        if missing.isEmpty, UpdateSchedule.shouldCheck(lastCheck: lastToolCheck, now: Date()) {
             Task { await self.updateTools(announce: true) }
         }
         // Uygulama günlerce açık kalırsa araçlar yine 2 günde bir güncellenir.
@@ -347,7 +359,8 @@ final class AppModel {
 
     func startDownload() {
         guard canDownload, let downloader, let site, let url = Site.normalizedURL(link) else { return }
-        let request = makeRequest(url, site, format: selectedFormat)
+        var request = makeRequest(url, site, format: selectedFormat)
+        request.subtitles = subtitles && offersSubtitles
         error = nil
         phase = .starting
         DoneNotifier.requestPermission()

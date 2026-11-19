@@ -116,4 +116,18 @@ import Foundation
         #expect(info.height(closestTo: 900) == 720)
         #expect(info.height(closestTo: 360) == 480)
     }
+
+    @Test func warnsWhenChosenQualityWontOpenInQuickTime() {
+        let streams = [
+            MediaInfo.Stream(height: 2160, width: 3840, vcodec: "vp09.00.50.08", acodec: "none", bytes: 900, isHLS: false),
+            MediaInfo.Stream(height: 1080, width: 1920, vcodec: "avc1.640028", acodec: "none", bytes: 300, isHLS: false),
+            MediaInfo.Stream(height: 1080, width: 1920, vcodec: "vp09.00.40.08", acodec: "none", bytes: 250, isHLS: false),
+        ]
+        let info = MediaInfo(title: "t", uploader: nil, duration: nil, thumbnailURL: nil, availableHeights: [2160, 1080], streams: streams)
+        #expect(!info.opensInQuickTime(maxHeight: 2160))
+        #expect(!info.opensInQuickTime(maxHeight: nil))
+        #expect(info.opensInQuickTime(maxHeight: 1080))
+        let unknown = MediaInfo(title: "t", uploader: nil, duration: nil, thumbnailURL: nil, availableHeights: [720])
+        #expect(unknown.opensInQuickTime(maxHeight: 720))
+    }
 }

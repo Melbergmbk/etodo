@@ -36,6 +36,8 @@ public struct DownloadRequest: Sendable {
     public var browser: Browser
     /// Tarayıcı çerezleri yalnız gerektiğinde okunur; macOS diğer uygulamaların verisine erişimi kısıtlıyor.
     public var useCookies: Bool
+    /// YouTube videosuna Türkçe/İngilizce altyazı gömülsün mü (varsa).
+    public var subtitles = false
 
     public init(url: URL, site: Site, format: MediaFormat, destination: URL, browser: Browser, useCookies: Bool = false) {
         self.url = url

@@ -78,6 +78,21 @@ import Foundation
         #expect(a.contains("--ignore-config"))
     }
 
+    @Test func subtitlesOnlyForYouTubeVideoWhenAsked() {
+        var r = request(.youtube, .video(maxHeight: 1080))
+        #expect(!CommandBuilder.ytdlpArguments(r, tools: tools).contains("--embed-subs"))
+        r.subtitles = true
+        let a = CommandBuilder.ytdlpArguments(r, tools: tools)
+        #expect(contains(a, ["--write-auto-subs", "--sub-langs", "tr,en", "--embed-subs"]))
+        #expect(!a.contains("--write-subs"))
+        var audio = request(.youtube, .audio(kbps: 192))
+        audio.subtitles = true
+        #expect(!CommandBuilder.ytdlpArguments(audio, tools: tools).contains("--embed-subs"))
+        var insta = request(.instagram, .video(maxHeight: nil))
+        insta.subtitles = true
+        #expect(!CommandBuilder.ytdlpArguments(insta, tools: tools).contains("--embed-subs"))
+    }
+
     @Test func infoArguments() {
         let a = CommandBuilder.infoArguments(request(.youtube, .video(maxHeight: nil), browser: .firefox), tools: tools)
         #expect(a.contains("-J"))
