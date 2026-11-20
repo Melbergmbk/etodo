@@ -13,11 +13,15 @@ public actor Downloader {
 
     /// Tarayıcı çerezlerine ilk kez dokunmadan önce kullanıcıya sorulur; false dönerse çerezsiz hata gösterilir.
     private let beforeCookies: (@Sendable (Browser) async -> Bool)?
+    /// Tarayıcı klasörü macOS tarafından kapalı mı (testte sabitlenir).
+    private let isProtected: @Sendable (Browser) -> Bool
 
-    public init(runner: ProcessRunning, tools: ToolPaths, beforeCookies: (@Sendable (Browser) async -> Bool)? = nil) {
+    public init(runner: ProcessRunning, tools: ToolPaths, beforeCookies: (@Sendable (Browser) async -> Bool)? = nil,
+                isProtected: @escaping @Sendable (Browser) -> Bool = { $0.isProfileBlocked }) {
         self.runner = runner
         self.tools = tools
         self.beforeCookies = beforeCookies
+        self.isProtected = isProtected
     }
 
     public func fetchInfo(_ r: DownloadRequest) async throws(UserFacingError) -> FetchResult {
@@ -139,7 +143,7 @@ public actor Downloader {
 
     private func fail(_ stderr: String, _ r: DownloadRequest) -> UserFacingError {
         lastErrorOutput = stderr
-        return .classify(stderr: stderr, browser: r.browser)
+        return .classify(stderr: stderr, browser: r.browser, isProtected: isProtected)
     }
 
     /// İptalden sonra yarım kalan dosyaları siler. yt-dlp (`--print` yüzünden) yazdığı dosyayı söylemediği için

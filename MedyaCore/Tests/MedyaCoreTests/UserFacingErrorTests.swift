@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import MedyaCore
 
@@ -69,6 +70,28 @@ import Testing
         #expect(!e.needsFullDiskAccess)
         #expect(e.message.contains("Chrome bu Mac'te bulunamadı"))
         #expect(UserFacingError.safariNeedsFullDiskAccess.needsFullDiskAccess)
+    }
+
+    @Test func protectedBrowserFolderNeedsFullDiskAccess() {
+        // macOS 27 tarayıcı klasörlerini korur; yt-dlp izin hatasını "bulunamadı" diye yazar.
+        let s = "ERROR: could not find chrome cookies database in \"/Users/x/Library/Application Support/Google/Chrome\""
+        let e = UserFacingError.classify(stderr: s, browser: .chrome, isProtected: { $0 == .chrome })
+        #expect(e == .browserNeedsFullDiskAccess(.chrome))
+        #expect(e.needsFullDiskAccess)
+        #expect(e.message.contains("Chrome'daki girişini"))
+        #expect(e.message.contains("Tam Disk Erişimi"))
+        #expect(!e.message.contains("bulunamadı"))
+    }
+
+    @Test func blockedFolderDetection() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("etodo-profile-\(UUID().uuidString)")
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path); try? fm.removeItem(at: root) }
+        #expect(!Browser.isBlocked(root))
+        #expect(!Browser.isBlocked(root.appendingPathComponent("yok")))
+        try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: root.path)
+        #expect(Browser.isBlocked(root))
     }
 
     @Test func ageRestricted() {

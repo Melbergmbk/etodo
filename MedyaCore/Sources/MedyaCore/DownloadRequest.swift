@@ -13,6 +13,27 @@ public enum Browser: String, CaseIterable, Sendable {
         }
     }
 
+    /// Tarayıcının profil klasörü (Safari'ninki kapsayıcıda, ayrı ele alınır).
+    public var profileFolder: URL? {
+        let support = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+        switch self {
+        case .chrome: return support.appendingPathComponent("Google/Chrome")
+        case .brave: return support.appendingPathComponent("BraveSoftware/Brave-Browser")
+        case .edge: return support.appendingPathComponent("Microsoft Edge")
+        case .firefox: return support.appendingPathComponent("Firefox")
+        case .safari: return nil
+        }
+    }
+
+    /// Klasör var ama içi okunamıyor mu: macOS 27 tarayıcı klasörlerini Tam Disk Erişimi olmayan uygulamalara kapatıyor.
+    public static func isBlocked(_ folder: URL) -> Bool {
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDir), isDir.boolValue else { return false }
+        return (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) == nil
+    }
+
+    public var isProfileBlocked: Bool { profileFolder.map(Browser.isBlocked) ?? false }
+
     /// Chromium tabanlılar çerezleri Anahtar Zinciri'ndeki bir anahtarla şifreler; macOS ilk okumada parola sorar.
     public var usesKeychain: Bool {
         switch self {

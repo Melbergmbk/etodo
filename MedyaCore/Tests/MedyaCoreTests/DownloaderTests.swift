@@ -178,13 +178,29 @@ final class ProgressBox: @unchecked Sendable {
             .init(matches: { u, a in !a.contains("--cookies-from-browser") }, result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: [Instagram] X: Requested content is not available, rate-limit reached or login required")),
             .init(matches: { u, a in a.contains("--cookies-from-browser") }, result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: could not find chrome cookies database in \"/Users/x/Library/Application Support/Google/Chrome\"")),
         ])
-        let d = Downloader(runner: runner, tools: tools)
+        let d = Downloader(runner: runner, tools: tools, isProtected: { _ in false })
         do {
             _ = try await d.fetchInfo(request(.instagram, .video(maxHeight: nil), dest: dir))
             Issue.record("hata bekleniyordu")
         } catch {
             #expect(error == .browserCookiesUnavailable(.chrome))
             #expect(!error.needsFullDiskAccess)
+        }
+    }
+
+    @Test func cookieRetryWithProtectedBrowserAsksFullDiskAccess() async throws {
+        let dir = try tempDir()
+        let runner = FakeRunner([
+            .init(matches: { u, a in !a.contains("--cookies-from-browser") }, result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: [Instagram] X: Requested content is not available, rate-limit reached or login required")),
+            .init(matches: { u, a in a.contains("--cookies-from-browser") }, result: ProcessResult(exitCode: 1, stdout: "", stderr: "ERROR: could not find chrome cookies database in \"/Users/x/Library/Application Support/Google/Chrome\"")),
+        ])
+        let d = Downloader(runner: runner, tools: tools, isProtected: { $0 == .chrome })
+        do {
+            _ = try await d.fetchInfo(request(.instagram, .video(maxHeight: nil), dest: dir))
+            Issue.record("hata bekleniyordu")
+        } catch {
+            #expect(error == .browserNeedsFullDiskAccess(.chrome))
+            #expect(error.needsFullDiskAccess)
         }
     }
 

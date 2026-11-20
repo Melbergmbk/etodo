@@ -8,6 +8,7 @@ public enum UserFacingError: Error, Equatable, Sendable {
     case destinationNotWritable
     case safariNeedsFullDiskAccess
     case browserCookiesUnavailable(Browser)
+    case browserNeedsFullDiskAccess(Browser)
     case ageRestricted(Browser)
     case youtubeBotCheck(Browser)
     case serverBusy
@@ -30,6 +31,8 @@ public enum UserFacingError: Error, Equatable, Sendable {
             "Seçtiğin klasöre kayıt yapılamıyor. Klasör silinmiş ya da yazma iznin yok; başka bir klasör seç."
         case .safariNeedsFullDiskAccess:
             "Safari'deki girişini kullanabilmek için \(AppIdentity.displayName) uygulamasına bir kez Tam Disk Erişimi vermen gerekiyor."
+        case .browserNeedsFullDiskAccess(let b):
+            "\(b.locative)ki girişini kullanabilmek için \(AppIdentity.displayName) uygulamasına bir kez Tam Disk Erişimi vermen gerekiyor. macOS, \(b.displayName) verilerini başka uygulamalardan koruyor."
         case .browserCookiesUnavailable(let b):
             "Bu bağlantı için tarayıcındaki giriş gerekiyor, ama \(b.displayName) bu Mac'te bulunamadı. Ayarlar'dan giriş yaptığın tarayıcıyı seç. Arc ya da Opera kullanıyorsan Chrome, Safari veya Firefox'ta siteye bir kez giriş yapman gerekir."
         case .ageRestricted(let b):
@@ -52,7 +55,7 @@ public enum UserFacingError: Error, Equatable, Sendable {
     /// Kullanıcının Tam Disk Erişimi vermesiyle çözülen hatalar ("Ayarları Aç" düğmesi için).
     public var needsFullDiskAccess: Bool {
         switch self {
-        case .safariNeedsFullDiskAccess: true
+        case .safariNeedsFullDiskAccess, .browserNeedsFullDiskAccess: true
         default: false
         }
     }
@@ -62,13 +65,15 @@ public enum UserFacingError: Error, Equatable, Sendable {
         return nil
     }
 
-    public static func classify(stderr: String, browser: Browser) -> UserFacingError {
+    /// `isProtected`: tarayıcının klasörü var ama macOS açtırmıyor mu (Tam Disk Erişimi yok).
+    public static func classify(stderr: String, browser: Browser,
+                                isProtected: (Browser) -> Bool = { _ in false }) -> UserFacingError {
         let text = stderr.lowercased()
         func has(_ needles: String...) -> Bool { needles.contains { text.contains($0) } }
 
         if has("operation not permitted") && has("cookies.binarycookies") { return .safariNeedsFullDiskAccess }
         if text.range(of: #"(could not|unable to) find .* cookies database"#, options: .regularExpression) != nil {
-            return .browserCookiesUnavailable(browser)
+            return isProtected(browser) ? .browserNeedsFullDiskAccess(browser) : .browserCookiesUnavailable(browser)
         }
         if has("unable to download") && has("errno 8", "nodename nor servname", "errno 51", "network is unreachable", "errno 65", "no route to host", "timed out") { return .noInternet }
         if has("unsupported url") { return .unsupportedLink }
