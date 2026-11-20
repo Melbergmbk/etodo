@@ -10,7 +10,22 @@
   &nbsp;·&nbsp; macOS 14 ve üzeri &nbsp;·&nbsp; Ücretsiz
 </p>
 
+<p align="center"><sub>Windows kullanıyor musun? → <a href="https://github.com/Melbergmbk/etodo-windows">Etodo for Windows</a></sub></p>
+
 <p align="center"><img src="docs/kurulum/ana-pencere.png" width="520" alt="Etodo ana penceresi"></p>
+
+---
+
+## İçindekiler
+
+- [Kurulum](#kurulum)
+- [Kullanım](#kullanım)
+- [Instagram için ek adım](#instagram-için-ek-adım)
+- [Güncellemeler](#güncellemeler)
+- [Sık sorulanlar](#sık-sorulanlar)
+- [Gizlilik](#gizlilik)
+- [Kullanmadan önce](#kullanmadan-önce)
+- [Lisans ve kullanılan araçlar](#lisans-ve-kullanılan-araçlar)
 
 ---
 
@@ -52,15 +67,22 @@ Hepsi bu. Bundan sonra Etodo her zaman normal bir uygulama gibi açılır.
 
 ## Kullanım
 
-1. Üstten siteyi seç: **YouTube**, **Instagram** ya da **Diğer** (X, TikTok ve yüzlerce site).
-2. Linki yapıştır (**⌘V**). Etodo videonun ön izlemesini gösterir.
-3. **MP4** (video) ya da **MP3** (ses) seç, kaliteyi belirle — her seçeneğin yanında dosyanın yaklaşık boyutu yazar — ve **İndir**'e bas. Etodo son seçimini hatırlar.
-4. İndirme sürerken bir sonraki linki yapıştırıp **Sıraya ekle**'ye basabilirsin; sırayla iner.
+### Link yapıştırma
+Üstten siteyi seç: **YouTube**, **Instagram** ya da **Diğer** (X, TikTok ve yüzlerce site). Linki yapıştır (**⌘V**). Etodo videonun ön izlemesini gösterir.
 
+### Biçim ve kalite
+**MP4** (video) ya da **MP3** (ses) seç, kaliteyi belirle — her seçeneğin yanında dosyanın yaklaşık boyutu yazar — ve **İndir**'e bas. Etodo son seçimini hatırlar.
+
+### Sıra
+İndirme sürerken bir sonraki linki yapıştırıp **Sıraya ekle**'ye basabilirsin; indirmeler sırayla iner.
+
+### İndirmeler listesi
 Pencerenin altındaki **İndirmeler** listesinde süren, sıradaki ve biten indirmeler görünür. Bitenlerin yanında **Göster** (Finder'da açar) ve **Tekrar indir** vardır. Liste son 20 indirmeyi yalnız bu Mac'te tutar; **Bitenleri temizle** ile silinir. Uzun bir indirme bitince Mac bildirimi gelir.
 
+### Altyazı
 YouTube videolarında **Türkçe ya da İngilizce altyazı ekle** kutusunu işaretlersen, varsa altyazı videonun içine eklenir (QuickTime'da Görüntü › Altyazılar).
 
+### Klasör düzeni
 Dosyalar kendiliğinden düzenli klasörlere iner:
 
 ```
@@ -78,14 +100,19 @@ Kayıt yerini indirme butonunun üstündeki klasör menüsünden değiştirebili
 
 ## Instagram için ek adım
 
-Instagram, giriş yapmadan çoğu içeriği vermez. Etodo bu durumda bilgisayarındaki tarayıcıda (ör. Chrome) açık olan Instagram oturumunu kullanır. Bunun için:
+Instagram, giriş yapmadan çoğu içeriği vermez. Etodo bu durumda bilgisayarındaki tarayıcıda (ör. Chrome) açık olan Instagram oturumunu kullanır. Önce tarayıcında Instagram hesabına giriş yap, sonra Etodo'nun **Ayarlar › Genel** bölümünde o tarayıcıyı seç.
 
-1. Tarayıcında Instagram hesabına giriş yapmış ol.
-2. Etodo'nun Ayarlar › Genel bölümünde o tarayıcıyı seç.
-3. **Chrome, Brave ya da Edge** kullanıyorsan macOS ilk seferde bir kez Mac'inin giriş şifresini sorar; şifreyi yazıp **Her Zaman İzin Ver**'i seç.
-4. **Safari** kullanıyorsan Etodo bir kez **Tam Disk Erişimi** ister. Hata kutusundaki adımları izle: **Ayarları Aç** → listede Etodo yoksa alttaki **+** ile ekle → anahtarı aç → Etodo'yu kapatıp yeniden aç.
+### Chrome, Brave ya da Edge
+macOS ilk seferde bir kez Mac'inin giriş şifresini sorar; şifreyi yazıp **Her Zaman İzin Ver**'i seç.
 
-Arc ya da Opera desteklenmiyor; bunları kullanıyorsan Instagram'a bir kez Chrome, Safari ya da Firefox'ta giriş yap.
+### Safari
+Etodo bir kez **Tam Disk Erişimi** ister. Hata kutusundaki adımları izle: **Ayarları Aç** → listede Etodo yoksa alttaki **+** ile ekle → anahtarı aç → Etodo'yu kapatıp yeniden aç.
+
+### Firefox
+Ek bir adım gerekmez.
+
+### Arc ya da Opera
+Desteklenmiyor; bunları kullanıyorsan Instagram'a bir kez Chrome, Safari ya da Firefox'ta giriş yap.
 
 Çerezlerin bilgisayarından hiçbir yere gönderilmez. Yalnızca indirme sırasında, senin Mac'inde kullanılır.
 
@@ -93,23 +120,39 @@ Arc ya da Opera desteklenmiyor; bunları kullanıyorsan Instagram'a bir kez Chro
 
 ## Güncellemeler
 
-Etodo hem kendisini hem indirme araçlarını güncel tutar. Yeni sürüm çıkınca bir pencere açılır ve pencerenin sağ üstünde küçük bir **Yeni sürüm** rozeti belirir. Beklemeden bakmak için menüden **Etodo › Güncellemeleri Kontrol Et…**
+Etodo hem kendisini hem indirme araçlarını güncel tutar.
+
+### Etodo'nun kendisi
+Yeni sürüm çıkınca bir pencere açılır ve pencerenin sağ üstünde küçük bir **Yeni sürüm** rozeti belirir. Beklemeden bakmak için menüden **Etodo › Güncellemeleri Kontrol Et…**
+
+### İndirme araçları
+yt-dlp ve diğer araçlar arka planda kendiliğinden güncellenir. Durumlarını **Ayarlar › Araçlar**'da görebilirsin.
 
 ---
 
 ## Sık sorulanlar
 
-**4K YouTube videosu QuickTime'da açılmıyor.**
+### 4K YouTube videosu QuickTime'da açılmıyor.
 YouTube 4K videoları Apple'ın QuickTime'ının açamadığı bir biçimde yayınlar. [IINA](https://iina.io) ya da [VLC](https://www.videolan.org) ile sorunsuz açılır. Ya da kaliteyi 1080p seç.
 
-**"Bu gönderi görünmüyor" diyor.**
+### "Bu gönderi görünmüyor" diyor.
 Hesap gizli olabilir ya da gönderi silinmiş olabilir. Gizli hesaplarda, tarayıcında o hesabı görebilen kullanıcıyla giriş yapmış olman gerekir.
 
-**Uygulamayı nasıl kaldırırım?**
+### Uygulamayı nasıl kaldırırım?
 Uygulamalar klasöründeki Etodo'yu Çöp Sepeti'ne at. Araçları da silmek istersen Finder'da **Git › Klasöre Git** ile `~/Library/Application Support/Etodo` klasörünü açıp sil. İstersen `~/Library/Caches/pip` ve `~/Library/Caches/yt-dlp` klasörlerini de silebilirsin. İndirdiğin dosyalara dokunulmaz.
 
-**Bir hata aldım.**
+### Bir hata aldım.
 Hata kutusundaki **Ayrıntıları göster › Kopyala** ile metni kopyalayıp bana ilet.
+
+---
+
+## Gizlilik
+
+Etodo hesap açtırmaz, reklam göstermez, veri toplamaz. Yalnız şunlara bağlanır:
+
+- indirmek istediğin sitelere,
+- indirme araçlarını kurup güncellemek için GitHub'a ve araçların kendi sitelerine,
+- kendi güncellemesi için bu depoya.
 
 ---
 
